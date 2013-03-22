@@ -3,15 +3,15 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/hammer/scenario"
 	"log"
 	"math/rand"
 	"net/http"
 	"runtime"
 	"strings"
-	// "sync"
+	"sync"
 	"sync/atomic"
 	"time"
-	"github.com/hammer/scenario"
 )
 
 // to reduce size of thread, speed up
@@ -22,17 +22,16 @@ const SizePerThread = 10000000
 // Counter will be an atomic, to count the number of request handled
 // which will be used to print PPS, etc.
 type Counter struct {
-
 	totalReq     int64 // total # of request
 	totalResTime int64 // total response time
-	totalErr int64 // how many error
+	totalErr     int64 // how many error
 	totalResSlow int64 // how many slow response
-	totalSend int64
+	totalSend    int64
 
-	lastSend  int64
-	lastReq int64
+	lastSend int64
+	lastReq  int64
 
-	client *http.Client
+	client  *http.Client
 	monitor *time.Ticker
 	// ideally error should be organized by type TODO
 	throttle <-chan time.Time
@@ -46,7 +45,7 @@ func (c *Counter) Init(p *scenario.Profile) {
 
 	c.client = &http.Client{
 		Transport: &http.Transport{
-			DisableKeepAlives: false,
+			DisableKeepAlives:   false,
 			MaxIdleConnsPerHost: 2000,
 		},
 	}
@@ -55,24 +54,19 @@ func (c *Counter) Init(p *scenario.Profile) {
 }
 
 // increase the count and record response time.
-func (c *Counter) record(_time int64) {
+func (c *Counter) recordRes(_time int64) {
 	atomic.AddInt64(&c.totalReq, 1)
 	atomic.AddInt64(&c.totalResTime, _time)
 
 	// if longer that 200ms, it is a slow response
-	if _time > slowThreshold * 1000000 {
+	if _time > slowThreshold*1000000 {
 		atomic.AddInt64(&c.totalResSlow, 1)
 		log.Println("slow response -> ", float64(_time)/1.0e9)
 	}
 }
 
-// when error happened, increase counter
-// TODO: maybe add error type later
 func (c *Counter) recordError() {
 	atomic.AddInt64(&c.totalErr, 1)
-
-	// we do not record time for errors.
-	// and there will not be count incr for calls as well
 }
 
 func (c *Counter) recordSend() {
@@ -80,7 +74,7 @@ func (c *Counter) recordSend() {
 }
 
 // main goroutine to drive traffic
-func (c *Counter) hammer() {
+func (c *Counter) hammer(call *scenario.Call) {
 	var req *http.Request
 	var err error
 
@@ -89,15 +83,15 @@ func (c *Counter) hammer() {
 	// before send out, update send count
 	c.recordSend()
 
-	call := (*c.profile).NextCall()
 	req, err = http.NewRequest(call.Method, call.URL, strings.NewReader(call.Body))
 
 	// Add special haeader for PATCH, PUT and POST
-	if call.Method == "PATCH" || call.Method == "PUT" || call.Method == "POST" {
-		if call.Type == "REST" {
-			// _params.Set("Accept", "application/json")
+	switch call.Method {
+	case "PATCH", "PUT", "POST":
+		switch call.Type {
+		case "REST":
 			req.Header.Set("Content-Type", "application/json; charset=utf-8")
-		} else if call.Type == "WWW" {
+		case "WWW":
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		}
 	}
@@ -134,10 +128,10 @@ func (c *Counter) hammer() {
 	// reference --> https://github.com/tenntenn/gae-go-testing/blob/master/recorder_test.go
 
 	// only record time for "good" call
-	c.record(response_time)
+	c.recordRes(response_time)
 }
 
-func (c *Counter) monitorHammer(){
+func (c *Counter) monitorHammer() {
 	sps := c.totalSend - c.lastSend
 	pps := c.totalReq - c.lastReq
 	backlog := c.totalSend - c.totalReq - c.totalErr
@@ -148,14 +142,14 @@ func (c *Counter) monitorHammer(){
 	avgT := float64(c.totalResTime) / (float64(c.totalReq) * 1.0e9)
 
 	log.Println(
-    	" total: ", fmt.Sprintf("%4d", c.totalSend),
-    	" req/s: ", fmt.Sprintf("%4d", sps),
-		" res/s: ", fmt.Sprintf("%4d", pps), 
+		" total: ", fmt.Sprintf("%4d", c.totalSend),
+		" req/s: ", fmt.Sprintf("%4d", sps),
+		" res/s: ", fmt.Sprintf("%4d", pps),
 		" avg: ", fmt.Sprintf("%2.4f", avgT),
 		" pending: ", backlog,
 		" err:", c.totalErr,
-			"|", fmt.Sprintf("%2.2f%s", (float64(c.totalErr)*100.0/float64(c.totalErr + c.totalReq)), "%"),
-		" slow: ", fmt.Sprintf("%2.2f%s", (float64(c.totalResSlow)*100.0/float64(c.totalResSlow + c.totalReq)), "%"))
+		"|", fmt.Sprintf("%2.2f%s", (float64(c.totalErr)*100.0/float64(c.totalErr+c.totalReq)), "%"),
+		" slow: ", fmt.Sprintf("%2.2f%s", (float64(c.totalResSlow)*100.0/float64(c.totalResSlow+c.totalReq)), "%"))
 }
 
 func (c *Counter) launch(rps int64) {
@@ -163,16 +157,41 @@ func (c *Counter) launch(rps int64) {
 
 	_p := time.Duration(rps)
 	_interval := 1000000000.0 / _p
-	// log.Println(_interval)
 	c.throttle = time.Tick(_interval * time.Nanosecond)
-		
+	var wg sync.WaitGroup
+
 	log.Println("run with rps -> ", int(_p))
-		// c.run_once(_rps)
 	go func() {
 		for {
-			<-c.throttle 
-			// threshold
-			go c.hammer()
+			calls, gap := (*c.profile).NextCalls()
+			if gap != -1 {
+				// session scenario, need to promise [0:gap-1]*calls executes first
+				for i := 0; i < gap; i++ {
+					<-c.throttle
+					// c.hammer(calls[i])
+					wg.Add(1)
+					go func() {
+						c.hammer(calls[i])
+						wg.Done()
+					}()
+				}
+				wg.Wait()
+
+				// then with ticker
+				for i := gap; i < len(calls); i++ {
+					<-c.throttle
+					// threshold
+					go c.hammer(calls[i])
+				}
+			} else {
+				// default scenario, launch only with ticker
+				for i := 0; i < len(calls); i++ {
+					<-c.throttle
+					// threshold
+					go c.hammer(calls[i])
+				}
+			}
+
 		}
 	}()
 
@@ -186,29 +205,32 @@ func (c *Counter) launch(rps int64) {
 }
 
 // init the program from command line
-var rps int64
-var profileFile string
-var slowThreshold int64
+var (
+	rps           int64
+	profileFile   string
+	profileType   string
+	slowThreshold int64
+)
 
 func init() {
 	flag.Int64Var(&rps, "rps", 500, "Set Request Per Second")
 	flag.StringVar(&profileFile, "profile", "", "The path to the traffic profile")
-	flag.Int64Var(&slowThreshold, "slowness", 200, "Set slowness standard (in millisecond)")
+	flag.Int64Var(&slowThreshold, "threshold", 200, "Set slowness standard (in millisecond)")
+	flag.StringVar(&profileType, "type", "default", "profile type: default or session")
 }
 
 // main func
 func main() {
-
+	flag.Parse()
 	NCPU := runtime.NumCPU()
-	log.Println("cpu number -> ", NCPU)
-
 	runtime.GOMAXPROCS(NCPU + 3)
 
-	flag.Parse()
+	log.Println("cpu number -> ", NCPU)
 	log.Println("rps -> ", rps)
 	log.Println("slow threshold -> ", slowThreshold, "ms")
+	log.Println("profile type -> ", profileType)
 
-	profile, _ := scenario.New("default")
+	profile, _ := scenario.New(profileType)
 	if profileFile != "" {
 		profile.InitFromFile(profileFile)
 	} else {
@@ -219,7 +241,7 @@ func main() {
 
 	counter := new(Counter)
 	counter.Init(&profile)
-	
+
 	go counter.launch(rps)
 
 	var input string

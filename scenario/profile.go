@@ -4,10 +4,10 @@ import (
 	"errors"
 )
 
-type Profile interface{
-	InitFromFile(string) 
-	InitFromCode() 
-	NextCall() (*Call)
+type Profile interface {
+	InitFromFile(string)
+	InitFromCode()
+	NextCalls() ([]*Call, int)
 }
 
 var scenarios = make(map[string]func() (Profile, error))

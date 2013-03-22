@@ -3,11 +3,13 @@ package main
 import (
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"runtime"
 )
 
 func hello(res http.ResponseWriter, req *http.Request) {
+	log.Println("hello")
 	res.Header().Set(
 		"Content-Type",
 		"text/html",
@@ -27,6 +29,7 @@ func hello(res http.ResponseWriter, req *http.Request) {
 }
 
 func hello_in_json(res http.ResponseWriter, req *http.Request) {
+	log.Println("hello_in_json")
 	res.Header().Set(
 		"Content-Type",
 		"text/json",
