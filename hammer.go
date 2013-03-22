@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"math/rand"
 	"net/http"
@@ -59,7 +58,7 @@ type Counter struct {
 	lastBadRPS  time.Duration
 
 	// profile
-	profile *scenario.Scenario
+	profile *scenario.Profile
 }
 
 // var TrafficProfile = new(trafficprofiles.Profile)
@@ -67,7 +66,7 @@ var _DEBUG bool
 var _HOST string
 
 // init
-func (c *Counter) _init(p *scenario.Scenario) {
+func (c *Counter) _init(p *scenario.Profile) {
 	tr := &http.Transport{
 		DisableKeepAlives: false,
 		MaxIdleConnsPerHost: 2000,
@@ -170,7 +169,6 @@ func (c *Counter) hammer() {
 
 	// only record time for "good" call
 	c.record(response_time)
-	call.Record(response_time)
 }
 
 // to print out performance counter
@@ -202,29 +200,6 @@ func (c *Counter) pperf() {
 		" Error:", c.totalerrors,
 		"|", fmt.Sprintf("%2.2f%s", (float64(c.totalerrors)*100.0/float64(c.totalerrors+c.count)), "%"),
 		" Slow Ratio: ", fmt.Sprintf("%2.2f%s", (float64(c.totalslowresp)*100.0/float64(c.totalerrors+c.count)), "%"))
-}
-
-// routine to return status
-func (c *Counter) stats(res http.ResponseWriter, req *http.Request) {
-	res.Header().Set(
-		"Content-Type", "text/plain",
-	)
-	io.WriteString(
-		res,
-		fmt.Sprintf("Total Request: %d\nTotal Error: %d\n==========\n%s",
-			c.count, c.totalerrors, string((*c.profile).Print())),
-	)
-}
-
-func index(res http.ResponseWriter, req *http.Request) {
-	res.Header().Set(
-		"Content-Type",
-		"text/html",
-	)
-	io.WriteString(
-		res,
-		`test`,
-	)
 }
 
 func (c *Counter) run_once(pps time.Duration) {
@@ -305,15 +280,6 @@ func init() {
 	flag.Int64Var(&slownessLimit, "slowness", 200, "Set slowness standard (in millisecond)")
 }
 
-func InitFromCode(s *scenario.Scenario) {
-	s.AddNewCall(10, "GET", "WWW", func()(string, string){
-		return "http://localhost:9000/hello", "{}"
-		})
-	s.AddNewCall(90, "GET", "WWW", func()(string, string){
-		return "http://localhost:9000/hello", "{}"
-		})
-}
-
 // main func
 func main() {
 
@@ -326,18 +292,17 @@ func main() {
 	log.Println("RPS is", initRPS)
 	log.Println("Slowness cap is", slownessLimit, "ms")
 
-	profile := scenario.New()
-	profile.InitFromCode = InitFromCode
+	profile, _ := scenario.New("default")
 	if profileFile != "" {
 		profile.InitFromFile(profileFile)
 	} else {
-		profile.InitFromCode(profile)
+		profile.InitFromCode()
 	}
 
 	rand.Seed(time.Now().UnixNano())
 
 	counter := new(Counter)
-	counter._init(profile)
+	counter._init(&profile)
 	
 	go counter.findPPS(initRPS)
 
