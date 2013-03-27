@@ -44,33 +44,35 @@ func (ss *SessionScenario) InitFromFile(path string) {
 
 func (ss *SessionScenario) InitFromCode() {
 	ss.addCallGroup(100, []GenRequest{
-		GenRequest(func() (_m, _t, _u, _b string) {
-			return "POST", "REST", "http://localhost:9988/post", "{\"fsdfsdfsdf\":\"ddddd\"}"
-		}),
-		GenRequest(func() (_m, _t, _u, _b string) {
+		GenRequest(func(...string) (_m, _t, _u, _b string) {
+			// return "POST", "REST", "http://localhost:9988/post", "{\"fsdfsdfsdf\":\"ddddd\"}"
 			return "GET", "REST", "http://localhost:9988/get", "{}"
 		}),
-		GenRequest(func() (_m, _t, _u, _b string) {
+		GenRequest(func(...string) (_m, _t, _u, _b string) {
+			return "GET", "REST", "http://localhost:9988/get", "{}"
+		}),
+		GenRequest(func(...string) (_m, _t, _u, _b string) {
 			return "GET", "REST", "http://localhost:9988/get", "{}"
 		}),
 	})
 }
 
-func (ss *SessionScenario) NextCalls() ([]*Call, int) {
+func (ss *SessionScenario) NextCalls() (*CallGroup, int) {
 	r := rand.Float32() * ss._totalWeight
 	for i := 0; i < ss._count; i++ {
 		if r <= ss._callGroups[i].RandomWeight {
-			for _, c := range ss._callGroups[i].Calls {
-				if c.GenFunc != nil {
-					c.Method, c.Type, c.URL, c.Body = c.GenFunc()
-				}
-			}
-			return ss._callGroups[i].Calls, ss._mustDone
+			// for _, c := range ss._callGroups[i].Calls {
+			// 	if c.GenFunc != nil {
+			// 		c.Method, c.Type, c.URL, c.Body = c.GenFunc()
+			// 	}
+			// }
+			ss._callGroups[i].BufferedChn = make(chan string, 1)
+			return &ss._callGroups[i], ss._mustDone
 		}
 	}
 
 	log.Fatal("what? should never reach here")
-	return ss._callGroups[0].Calls, ss._mustDone
+	return &ss._callGroups[0], ss._mustDone
 }
 
 func (ss *SessionScenario) addCallGroup(weight float32, gens []GenRequest) {
