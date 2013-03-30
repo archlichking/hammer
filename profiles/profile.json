@@ -1,3 +1,0 @@
-{"Weight": 20, "URL":"https://vgs.developer.gree.net/api/v1/test/56677", "Method":"GET", "Body":""}
-{"Weight": 30, "URL":"https://vgs.developer.gree.net/api/v1/test/56677/players/1", "Method":"GET", "Body":""}
-{"Weight": 40, "URL":"https://vgs.developer.gree.net/api/v1/test/56677/players/2", "Method":"GET", "Body":""}
