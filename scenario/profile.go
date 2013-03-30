@@ -7,7 +7,7 @@ import (
 type Profile interface {
 	InitFromFile(string)
 	InitFromCode()
-	NextCalls() (*CallGroup, int)
+	NextCall() (*Call, error)
 }
 
 var scenarios = make(map[string]func() (Profile, error))

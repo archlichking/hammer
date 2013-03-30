@@ -8,12 +8,13 @@ import (
 	"log"
 	"math/rand"
 	"fmt"
+	"errors"
 )
 
 type Scenario struct {
 	_totalWeight float32
-	_calls       [100]Call
-	_num         int
+	_calls       []*Call
+	_count         int
 }
 
 func (s *Scenario) InitFromFile(path string) {
@@ -34,28 +35,27 @@ func (s *Scenario) InitFromFile(path string) {
 		}
 
 		m.normalize()
-		s._calls[s._num] = m
+		s._calls[s._count] = &m
 
 		s._totalWeight = s._totalWeight + m.Weight
-		s._calls[s._num].RandomWeight = s._totalWeight
-		log.Print(s._calls[s._num])
+		s._calls[s._count].RandomWeight = s._totalWeight
+		log.Print(s._calls[s._count])
 
-		s._num++
+		s._count++
 		fmt.Printf("Import Call -> W: %f URL: %s  Method: %s\n", m.Weight, m.URL, m.Method)
 	}
 }
 
-func (s *Scenario) NextCall() (*Call) {
+func (s *Scenario) NextCall() (*Call, error) {
 	r := rand.Float32() * s._totalWeight
-	for i := 0; i < s._num; i++ {
+	for i := 0; i < s._count; i++ {
 		if r <= s._calls[i].RandomWeight {
-			if s._calls[i].GenFunc != nil {
-				s._calls[i].Method, s._calls[i].Type, s._calls[i].URL, s._calls[i].Body = s._calls[i].GenFunc()
+			if s._calls[i].GenParam != nil {
+				s._calls[i].Method, s._calls[i].Type, s._calls[i].URL, s._calls[i].Body = s._calls[i].GenParam()
 			} 
-			return &s._calls[i]
+			return s._calls[i], nil
 		}
 	}
 
-	log.Fatal("what? should never reach here")
-	return &s._calls[1]
+	return nil, errors.New("something wrong with randomize number")
 }

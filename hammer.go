@@ -9,12 +9,12 @@ import (
 	"net/http"
 	"runtime"
 	"strings"
-	"encoding/json"
-	"strconv"
+	// "encoding/json"
+	// "strconv"
 	// "sync"
 	"sync/atomic"
 	"time"
-	"io/ioutil"
+	// "io/ioutil"
 )
 
 // to reduce size of thread, speed up
@@ -38,13 +38,10 @@ type Counter struct {
 	monitor *time.Ticker
 	// ideally error should be organized by type TODO
 	throttle <-chan time.Time
-
-	// profile
-	profile *scenario.Profile
 }
 
 // init
-func (c *Counter) Init(p *scenario.Profile) {
+func (c *Counter) Init() {
 
 	c.client = &http.Client{
 		Transport: &http.Transport{
@@ -52,8 +49,6 @@ func (c *Counter) Init(p *scenario.Profile) {
 			MaxIdleConnsPerHost: 200000,
 		},
 	}
-
-	c.profile = p
 }
 
 // increase the count and record response time.
@@ -77,20 +72,23 @@ func (c *Counter) recordSend() {
 }
 
 // main goroutine to drive traffic
-func (c *Counter) hammer(callGroup *scenario.CallGroup, index int) {
-	var req *http.Request
-	var err error
-	
-
+func (c *Counter) hammer() {
 	// before send out, update send count
 	c.recordSend()
 
-	req, err = http.NewRequest(callGroup.Calls[index].Method, callGroup.Calls[index].URL, strings.NewReader(callGroup.Calls[index].Body))
+	call, err := profile.NextCall()
+
+	if err != nil {
+		log.Println("next call error: ", err)
+		return
+	}
+
+	req, err := http.NewRequest(call.Method, call.URL, strings.NewReader(call.Body))
 
 	// Add special haeader for PATCH, PUT and POST
-	switch callGroup.Calls[index].Method {
+	switch call.Method {
 	case "PATCH", "PUT", "POST":
-		switch callGroup.Calls[index].Type {
+		switch call.Type {
 		case "REST":
 			req.Header.Set("Content-Type", "application/json; charset=utf-8")
 		case "WWW":
@@ -102,31 +100,9 @@ func (c *Counter) hammer(callGroup *scenario.CallGroup, index int) {
 
 	response_time := time.Now().UnixNano() - t1
 	
-	
-
-	// if debug {
-	// 	log.Println("Req : ", callGroup.Calls[index].Method, callGroup.Calls[index].URL)
-	// 		log.Println("Req Body : ", callGroup.Calls[index].Body)
-	// 		log.Println("Response: ", res.Status)
-	// 		log.Println("Res Body : ", string(bodyBytes))
-	// }
-
-	if index == 1{
-		// hack here to cache playerid
-		bodyBytes, _ := ioutil.ReadAll(res.Body)
-	    u := map[string]interface{}{}
-	    e := json.Unmarshal(bodyBytes, &u)
-	    if e != nil {
-	      panic(e)
-	    }
-	    // fmt.Println(u["metadata"]["player"]["player_id"])
-	    player_id := u["metadata"].(map[string]interface{})["player"].(map[string]interface{})["player_id"]
-	    fmt.Println("##############", player_id, "#############")
-	    callGroup.BufferedChn <- "player_id.(string)"
-	}
 
 	if err != nil {
-		log.Println("Response Time: ", float64(response_time)/1.0e9, " Erorr: when", callGroup.Calls[index].Method, callGroup.Calls[index].URL, "with error ", err)
+		log.Println("Response Time: ", float64(response_time)/1.0e9, " Erorr: when", call.Method, call.URL, "with error ", err)
 		c.recordError()
 		return
 	}
@@ -145,7 +121,7 @@ func (c *Counter) hammer(callGroup *scenario.CallGroup, index int) {
 
 	if res.StatusCode >= 400 && res.StatusCode != 409 {
 		//fmt.Println(res.Status, string(data))
-		log.Println("Got error code --> ", res.Status, "for call ", callGroup.Calls[index].Method, " ", callGroup.Calls[index].URL)
+		log.Println("Got error code --> ", res.Status, "for call ", call.Method, " ", call.URL)
 		c.recordError()
 		return
 	}
@@ -153,7 +129,7 @@ func (c *Counter) hammer(callGroup *scenario.CallGroup, index int) {
 	// reference --> https://github.com/tenntenn/gae-go-testing/blob/master/recorder_test.go
 
 	// only record time for "good" call
-	c.recordRes(response_time, callGroup.Calls[index].Body)
+	c.recordRes(response_time, call.Body)
 }
 
 func (c *Counter) monitorHammer() {
@@ -188,62 +164,8 @@ func (c *Counter) launch(rps int64) {
 	log.Println("run with rps -> ", int(_p))
 	go func() {
 		for {
-			callGroup, gap := (*c.profile).NextCalls()
-			if gap != -1 {
-				// session scenario, need to promise [0:gap-1]*calls executes first
-				// for i := 0; i < gap; i++ {
-				// 	<-c.throttle
-				// 	wg.Add(1)
-				// 	go func(index int) {
-				// 		c.hammer(calls[index])
-				// 		wg.Done()
-				// 	}(i)
-				// }
-				// wg.Wait()
-
-				// then with ticker
-				// for i := gap; i < len(calls); i++ {
-				// 	<-c.throttle
-				// 	// threshold
-				// 	go c.hammer(calls[i])
-				// }
-				// make all call sequential
-				var player_id = ""
-				_UDID := strconv.FormatInt(time.Now().UnixNano(), 10)
-				for i := 0; i < gap; i++ {
-					<-c.throttle
-					// threshold
-					if callGroup.Calls[i].GenFunc != nil {
-						// generate _UDID
-						
-						seq_num := strconv.Itoa(i+1)
-						
-						select{
-							case player_id = <-callGroup.BufferedChn:
-							default:
-						}
-						callGroup.Calls[i].Method, callGroup.Calls[i].Type, callGroup.Calls[i].URL, callGroup.Calls[i].Body = callGroup.Calls[i].GenFunc([]string{_UDID, seq_num, player_id}...)
-					}
-					c.hammer(callGroup, i)
-				}
-				for i := gap; i < len(callGroup.Calls); i++ {
-					<-c.throttle
-					// threshold
-					if callGroup.Calls[i].GenFunc != nil {
-						seq_num := strconv.Itoa(i+1)
-						callGroup.Calls[i].Method, callGroup.Calls[i].Type, callGroup.Calls[i].URL, callGroup.Calls[i].Body = callGroup.Calls[i].GenFunc([]string{_UDID, seq_num, player_id}...)
-					}
-					go c.hammer(callGroup, i)
-				}
-			} else {
-				// default scenario, launch only with ticker
-				for i := 0; i < len(callGroup.Calls); i++ {
-					<-c.throttle
-					// threshold
-					c.hammer(callGroup, i)
-				}
-			}
-
+			<-c.throttle
+			go c.hammer()
 		}
 	}()
 
@@ -263,6 +185,9 @@ var (
 	profileType   string
 	slowThreshold int64
 	debug bool
+
+	// profile
+	profile scenario.Profile
 )
 
 func init() {
@@ -275,6 +200,7 @@ func init() {
 
 // main func
 func main() {
+
 	flag.Parse()
 	NCPU := runtime.NumCPU()
 	runtime.GOMAXPROCS(NCPU + 3)
@@ -284,7 +210,7 @@ func main() {
 	log.Println("slow threshold -> ", slowThreshold, "ms")
 	log.Println("profile type -> ", profileType)
 
-	profile, _ := scenario.New(profileType)
+	profile, _ = scenario.New(profileType)
 	if profileFile != "" {
 		profile.InitFromFile(profileFile)
 	} else {
@@ -294,7 +220,7 @@ func main() {
 	rand.Seed(time.Now().UnixNano())
 
 	counter := new(Counter)
-	counter.Init(&profile)
+	counter.Init()
 
 	go counter.launch(rps)
 
