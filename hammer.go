@@ -14,7 +14,7 @@ import (
 	// "sync"
 	"sync/atomic"
 	"time"
-	// "io/ioutil"
+	"io/ioutil"
 )
 
 // to reduce size of thread, speed up
@@ -130,6 +130,11 @@ func (c *Counter) hammer() {
 
 	// only record time for "good" call
 	c.recordRes(response_time, call.Body)
+
+	if call.CallBack != nil {
+		data, _ := ioutil.ReadAll(res.Body)
+		call.CallBack(call.SePoint, scenario.NEXT, string(data))
+	}
 }
 
 func (c *Counter) monitorHammer() {
