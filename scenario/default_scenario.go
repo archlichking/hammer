@@ -1,33 +1,87 @@
 package scenario
 
 import (
+	"os"
+	"encoding/json"
+	"strings"
+	"io"
+	"log"
+	"math/rand"
+	"fmt"
+	"errors"
 )
 
-type DefaultScenario struct {
-	Scenario
+type Scenario struct {
+	_totalWeight float32
+	_calls       []*Call
+	_count         int
 }
 
-func (ds *DefaultScenario) InitFromCode() {
-	ds._calls = make([]*Call, 100)
-	ds.addCall(5, GenCall(func(...string) (_m, _t, _u, _b string) {
+func (s *Scenario) InitFromFile(path string) {
+	buf := make([]byte, 2048)
+
+	f, _ := os.Open(path)
+	f.Read(buf)
+
+	dec := json.NewDecoder(strings.NewReader(string(buf)))
+	for {
+		var m Call
+		if err := dec.Decode(&m); err == io.EOF {
+			break
+		} else if err != nil {
+			//log.Println(err)
+			// TODO, fix error handling
+			break
+		}
+
+		m.normalize()
+		s._calls[s._count] = &m
+
+		s._totalWeight = s._totalWeight + m.Weight
+		s._calls[s._count].RandomWeight = s._totalWeight
+		log.Print(s._calls[s._count])
+
+		s._count++
+		fmt.Printf("Import Call -> W: %f URL: %s  Method: %s\n", m.Weight, m.URL, m.Method)
+	}
+}
+
+func (s *Scenario) InitFromCode() {
+	s._calls = make([]*Call, 100)
+	s.addCall(5, GenCall(func(...string) (_m, _t, _u, _b string) {
 			return "POST", "REST", "http://localhost:9988/post", "{\"fsdfsdfsdf\":\"ddddd\"}"
-		}))
-	ds.addCall(35, GenCall(func(...string) (_m, _t, _u, _b string) {
+		}), nil)
+	s.addCall(35, GenCall(func(...string) (_m, _t, _u, _b string) {
 			return "GET", "REST", "http://localhost:9988/get", "{}"
-		}))
-	ds.addCall(60, GenCall(func(...string) (_m, _t, _u, _b string) {
+		}), nil)
+	s.addCall(60, GenCall(func(...string) (_m, _t, _u, _b string) {
 			return "GET", "REST", "http://localhost:9988/get", "{}"
-		}))
+		}), nil)
 }
 
-func (ds *DefaultScenario) addCall(weight float32, gp GenCall) {
-	ds._totalWeight = ds._totalWeight + weight
-	ds._calls[ds._count] = new(Call)
-	ds._calls[ds._count].RandomWeight = ds._totalWeight
-	ds._calls[ds._count].GenParam = gp
+func (s *Scenario) NextCall() (*Call, error) {
+	r := rand.Float32() * s._totalWeight
+	for i := 0; i < s._count; i++ {
+		if r <= s._calls[i].RandomWeight {
+			if s._calls[i].GenParam != nil {
+				s._calls[i].Method, s._calls[i].Type, s._calls[i].URL, s._calls[i].Body = s._calls[i].GenParam()
+			} 
+			return s._calls[i], nil
+		}
+	}
 
-	ds._calls[ds._count].normalize()
-	ds._count++
+	return nil, errors.New("something wrong with randomize number")
+}
+
+func (s *Scenario) addCall(weight float32, gp GenCall, cb GenCallBack) {
+	s._totalWeight = s._totalWeight + weight
+	s._calls[s._count] = new(Call)
+	s._calls[s._count].RandomWeight = s._totalWeight
+	s._calls[s._count].GenParam = gp
+	s._calls[s._count].CallBack = nil
+
+	s._calls[s._count].normalize()
+	s._count++
 }
 
 func init() {
@@ -35,5 +89,5 @@ func init() {
 }
 
 func newDefaultScenario() (Profile, error) {
-	return &DefaultScenario{}, nil
+	return &Scenario{}, nil
 }
