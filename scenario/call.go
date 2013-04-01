@@ -26,4 +26,4 @@ func (c *Call) normalize() {
 }
 
 type GenCall func(ps ...string) (_m, _t, _u, _b string)
-type GenCallBack func(se *Session, st int, storage string)
+type GenCallBack func(se *Session, st int, storage []byte)

@@ -2,6 +2,7 @@ package scenario
 
 import (
 	"sync"
+	// "log"
 )
 
 type Session struct {
@@ -12,19 +13,19 @@ type Session struct {
 	State int
 	StepLock chan int
 	InternalLock sync.Mutex
-	Storage string
+	Storage map[string]string
 }
 
-func (s *Session) UpdateStateAndStorage(st int, storage string) {
+func (s *Session) UpdateStateAndStorage(st int, storage ...string) {
 	// atomic.AddInt64(&s.State, st)
 	// State <- st
 	s.InternalLock.Lock()
 	defer s.InternalLock.Unlock()
 
-	// log.Println("callback")
+	// log.Println(storage[0], storage[1])
 	s.State += st
+	s.Storage[storage[0]] = storage[1]
 	s.StepLock <- s.State
-	s.Storage = storage
 }
 
 // to add a new call to traffic profiles with Random Function

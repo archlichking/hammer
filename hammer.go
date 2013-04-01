@@ -141,9 +141,23 @@ func (c *Counter) hammer() {
 	default:
 		// only do successful response here
 		c.recordRes(response_time, call.Body)
-		if call.CallBack != nil {
+		
+		if call.CallBack == nil && !debug{
+			return
+		}else{
 			data, _ := ioutil.ReadAll(res.Body)
-			call.CallBack(call.SePoint, scenario.NEXT, string(data))
+			if debug{
+				log.Println("Req : ", call.Method, call.URL)
+				if auth_method != "none" {
+					log.Println("Authorization: ", string(req.Header.Get("Authorization")))
+				}
+				log.Println("Req Body : ", call.Body)
+				log.Println("Response: ", res.Status)
+				log.Println("Res Body : ", string(data))
+			}
+			if call.CallBack != nil{
+				call.CallBack(call.SePoint, scenario.NEXT, data)
+			}
 		}
 	}
 
