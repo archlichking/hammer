@@ -3,10 +3,10 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/hammer/scenario"
 	"log"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"runtime"
 	"strings"
 	// "encoding/json"
@@ -15,6 +15,10 @@ import (
 	"sync/atomic"
 	"time"
 	"io/ioutil"
+
+
+	"github.com/hammer/scenario"
+	"github.com/hammer/auth"
 )
 
 // to reduce size of thread, speed up
@@ -46,7 +50,7 @@ func (c *Counter) Init() {
 	c.client = &http.Client{
 		Transport: &http.Transport{
 			DisableKeepAlives:   false,
-			MaxIdleConnsPerHost: 200000,
+			MaxIdleConnsPerHost: 20000,
 		},
 	}
 }
@@ -75,7 +79,6 @@ func (c *Counter) recordSend() {
 func (c *Counter) hammer() {
 	// before send out, update send count
 	c.recordSend()
-
 	call, err := profile.NextCall()
 
 	if err != nil {
@@ -84,6 +87,26 @@ func (c *Counter) hammer() {
 	}
 
 	req, err := http.NewRequest(call.Method, call.URL, strings.NewReader(call.Body))
+
+	switch auth_method {
+	case "oauth":
+		_signature := oauth_client.AuthorizationHeaderWithBodyHash(nil, call.Method, call.URL, url.Values{}, call.Body)
+		req.Header.Add("Authorization", _signature)
+	case "grees2s":
+		// gree authen here
+		// SignS2SRequest(method string, url string, body string) (string, string, error)
+		_signature, _timestamp, _ := gree_client.SignS2SRequest(call.Method, call.URL, call.Body)
+
+		req.Header.Add("Authorization", "S2S"+" realm=\"modern-war\""+
+			", signature=\""+_signature+"\", timestamp=\""+_timestamp+"\"")
+	case "greec2s":
+		// gree authen here
+		// SignS2SRequest(method string, url string, body string) (string, string, error)
+		_signature, _timestamp, _ := gree_client.SignC2SRequest(call.Method, call.URL, call.Body)
+
+		req.Header.Add("Authorization", "C2S"+" realm=\"jackpot-slots\""+
+			", signature=\""+_signature+"\", timestamp=\""+_timestamp+"\"")
+	}
 
 	// Add special haeader for PATCH, PUT and POST
 	switch call.Method {
@@ -95,17 +118,11 @@ func (c *Counter) hammer() {
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		}
 	}
+
 	t1 := time.Now().UnixNano()
 	res, err := c.client.Do(req)
 
 	response_time := time.Now().UnixNano() - t1
-	
-
-	if err != nil {
-		log.Println("Response Time: ", float64(response_time)/1.0e9, " Erorr: when", call.Method, call.URL, "with error ", err)
-		c.recordError()
-		return
-	}
 
 	/*
 		    ###
@@ -113,28 +130,26 @@ func (c *Counter) hammer() {
 		    by doing this, hope we can save more file descriptor.
 			##
 	*/
-	defer req.Body.Close()
-	defer res.Body.Close()
-
-	// check response code here
-	// 409 conflict is ok for PATCH request
-
-	if res.StatusCode >= 400 && res.StatusCode != 409 {
-		//fmt.Println(res.Status, string(data))
+	
+	switch{
+	case err != nil:
+		log.Println("Response Time: ", float64(response_time)/1.0e9, " Erorr: when", call.Method, call.URL, "with error ", err)
+	case res.StatusCode >= 400 && res.StatusCode != 409:
 		log.Println("Got error code --> ", res.Status, "for call ", call.Method, " ", call.URL)
 		c.recordError()
 		return
+	default:
+		// only do successful response here
+		c.recordRes(response_time, call.Body)
+		if call.CallBack != nil {
+			data, _ := ioutil.ReadAll(res.Body)
+			call.CallBack(call.SePoint, scenario.NEXT, string(data))
+		}
 	}
 
-	// reference --> https://github.com/tenntenn/gae-go-testing/blob/master/recorder_test.go
 
-	// only record time for "good" call
-	c.recordRes(response_time, call.Body)
-
-	if call.CallBack != nil {
-		data, _ := ioutil.ReadAll(res.Body)
-		call.CallBack(call.SePoint, scenario.NEXT, string(data))
-	}
+	defer req.Body.Close()
+	defer res.Body.Close()
 }
 
 func (c *Counter) monitorHammer() {
@@ -190,17 +205,26 @@ var (
 	profileType   string
 	slowThreshold int64
 	debug bool
+	auth_method string
+
 
 	// profile
 	profile scenario.Profile
+
+	gree_client = new(auth.GreeClient)
+	oauth_client = new(auth.Client)
 )
 
 func init() {
 	flag.Int64Var(&rps, "rps", 500, "Set Request Per Second")
 	flag.StringVar(&profileFile, "profile", "", "The path to the traffic profile")
 	flag.Int64Var(&slowThreshold, "threshold", 200, "Set slowness standard (in millisecond)")
-	flag.StringVar(&profileType, "type", "default", "profile type: default or session")
-	flag.BoolVar(&debug, "debug", false, "debug flag")
+	flag.StringVar(&profileType, "type", "default", "Profile type (default|session|your session type)")
+	flag.BoolVar(&debug, "debug", false, "debug flag (true|false)")
+	flag.StringVar(&auth_method, "auth", "none", "Set authorization flag (oauth|gree(c|s)2s|none)")
+
+	gree_client.C2S_Secret = "a178b352cb1a8ab08f76619f27d2e739"
+	gree_client.S2S_Secret = "923ee6aa9d1096e5a366b3a987e961a7"
 }
 
 // main func

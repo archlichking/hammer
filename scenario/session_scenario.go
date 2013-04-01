@@ -44,16 +44,16 @@ func (ss *SessionScenario) InitFromCode() {
 						se.UpdateStateAndStorage(st, storage)
 					})
 			}),
-			GenSession(func() (float32, GenCall, GenCallBack) {
-				return 0,
-					GenCall(func(...string) (_m, _t, _u, _b string) {
-						return "POST", "REST", "http://localhost:9988/post", "{\"fsdfsdfsdf\":\"ddddd\"}"
-						// return "GET", "REST", "http://localhost:9988/get", "{}"
-					}),
-					GenCallBack(func(se *Session, st int, storage string) {
-						se.UpdateStateAndStorage(st, storage)
-					})
-			}),
+			// GenSession(func() (float32, GenCall, GenCallBack) {
+			// 	return 0,
+			// 		GenCall(func(...string) (_m, _t, _u, _b string) {
+			// 			return "POST", "REST", "http://localhost:9988/post", "{\"fsdfsdfsdf\":\"ddddd\"}"
+			// 			// return "GET", "REST", "http://localhost:9988/get", "{}"
+			// 		}),
+			// 		GenCallBack(func(se *Session, st int, storage string) {
+			// 			se.UpdateStateAndStorage(st, storage)
+			// 		})
+			// }),
 			GenSession(func() (float32, GenCall, GenCallBack) {
 				return 55,
 					GenCall(func(...string) (_m, _t, _u, _b string) {
@@ -80,7 +80,7 @@ func (ss *SessionScenario) NextCall() (*Call, error) {
 			select {
 			case st := <- ss._sessions[i].StepLock :
 				switch st{
-				case STEP1, STEP2:
+				case STEP1:
 					// log.Println("step1 ", i)
 					if ss._sessions[i]._calls[st].GenParam != nil {
 						ss._sessions[i]._calls[st].Method, ss._sessions[i]._calls[st].Type, ss._sessions[i]._calls[st].URL, ss._sessions[i]._calls[st].Body = ss._sessions[i]._calls[st].GenParam()
@@ -113,7 +113,6 @@ func (ss *SessionScenario) NextCall() (*Call, error) {
 	return nil, errors.New("all sessions are being initialized")
 }
 
-
 func (ss *SessionScenario) addSession(gens []GenSession) {
 	// log.Println(len(gens), p._count, p._sessions)
 	ss._sessions[ss._count] = new(Session)
@@ -134,6 +133,6 @@ func init() {
 
 func newSessionScenario() (Profile, error) {
 	return &SessionScenario{
-		SessionAmount: 100,
+		SessionAmount: 10,
 	}, nil
 }
