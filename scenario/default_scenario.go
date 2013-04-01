@@ -47,15 +47,15 @@ func (s *Scenario) InitFromFile(path string) {
 }
 
 func (s *Scenario) InitFromCode() {
-	s._calls = make([]*Call, 100)
+	s._calls = make([]*Call, 3)
 	s.addCall(5, GenCall(func(...string) (_m, _t, _u, _b string) {
-			return "POST", "REST", "http://localhost:9988/post", "{\"fsdfsdfsdf\":\"ddddd\"}"
+			return "POST", "REST", "http://127.0.0.1:9000/hello_in_json", "{\"fsdfsdfsdf\":\"ddddd\"}"
 		}), nil)
 	s.addCall(35, GenCall(func(...string) (_m, _t, _u, _b string) {
-			return "GET", "REST", "http://localhost:9988/get", "{}"
+			return "GET", "REST", "http://127.0.0.1:9000/hello", "{}"
 		}), nil)
 	s.addCall(60, GenCall(func(...string) (_m, _t, _u, _b string) {
-			return "GET", "REST", "http://localhost:9988/get", "{}"
+			return "GET", "REST", "http://127.0.0.1:9000/hello", "{}"
 		}), nil)
 }
 

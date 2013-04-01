@@ -50,7 +50,6 @@ func (c *Counter) Init() {
 	c.client = &http.Client{
 		Transport: &http.Transport{
 			DisableKeepAlives:   false,
-			MaxIdleConnsPerHost: 20000,
 		},
 	}
 }
@@ -63,7 +62,7 @@ func (c *Counter) recordRes(_time int64, method string) {
 	// if longer that 200ms, it is a slow response
 	if _time > slowThreshold*1000000 {
 		atomic.AddInt64(&c.totalResSlow, 1)
-		// log.Println("slow response -> ", float64(_time)/1.0e9, method)
+		log.Println("slow response -> ", float64(_time)/1.0e9, method)
 	}
 }
 
@@ -140,8 +139,8 @@ func (c *Counter) hammer() {
 		return
 	default:
 		// only do successful response here
-		c.recordRes(response_time, call.Body)
-		
+		c.recordRes(response_time, call.URL)
+		defer res.Body.Close()
 		if call.CallBack == nil && !debug{
 			return
 		}else{
@@ -158,12 +157,13 @@ func (c *Counter) hammer() {
 			if call.CallBack != nil{
 				call.CallBack(call.SePoint, scenario.NEXT, data)
 			}
+
 		}
 	}
 
 
-	defer req.Body.Close()
-	defer res.Body.Close()
+	// defer req.Body.Close()
+	
 }
 
 func (c *Counter) monitorHammer() {

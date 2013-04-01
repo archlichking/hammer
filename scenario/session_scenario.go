@@ -37,7 +37,7 @@ func (ss *SessionScenario) InitFromCode() {
 			GenSession(func() (float32, GenCall, GenCallBack) {
 				return 0,
 					GenCall(func(...string) (_m, _t, _u, _b string) {
-						return "POST", "REST", "http://localhost:9988/post", "{\"fsdfsdfsdf\":\"ddddd\"}"
+						return "POST", "REST", "http://127.0.0.1:9000/hello_in_json", "{\"fsdfsdfsdf\":\"ddddd\"}"
 					}),
 					GenCallBack(func(se *Session, st int, storage []byte) {
 						se.UpdateStateAndStorage(st, "string-key", string(storage))
@@ -46,14 +46,14 @@ func (ss *SessionScenario) InitFromCode() {
 			GenSession(func() (float32, GenCall, GenCallBack) {
 				return 55,
 					GenCall(func(...string) (_m, _t, _u, _b string) {
-						return "GET", "REST", "http://localhost:9988/get", "{}"
+						return "GET", "REST", "http://127.0.0.1:9000/hello", "{}"
 					}),
 					nil
 			}),
 			GenSession(func() (float32, GenCall, GenCallBack) {
 				return 45,
 					GenCall(func(...string) (_m, _t, _u, _b string) {
-						return "GET", "REST", "http://localhost:9988/get", "{}"
+						return "GET", "REST", "http://127.0.0.1:9000/hello", "{}"
 					}),
 					nil
 			}),
@@ -97,7 +97,7 @@ func (ss *SessionScenario) NextCall() (*Call, error) {
 }
 
 func (ss *SessionScenario) addSession(gens []GenSession) {
-	
+
 	ss._sessions[ss._count] = new(Session)
 	ss._sessions[ss._count].StepLock = make(chan int, 1)
 	ss._sessions[ss._count].StepLock <- STEP1

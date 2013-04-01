@@ -118,7 +118,7 @@ func (ss *HCScenario) NextCall() (*Call, error) {
 					// choose a non-initialized call randomly
 					ss._sessions[i].StepLock <- REST
 					q := rand.Float32() * ss._sessions[i]._totalWeight
-					for j := STEP1+1; j < ss._sessions[i]._count; j++ {
+					for j := STEP2+1; j < ss._sessions[i]._count; j++ {
 						if q <= ss._sessions[i]._calls[j].RandomWeight {
 							// add 1 to seq
 							ss._sessions[i].InternalLock.Lock()
