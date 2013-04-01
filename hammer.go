@@ -184,7 +184,7 @@ func (c *Counter) monitorHammer() {
 		" pending: ", backlog,
 		" err:", c.totalErr,
 		"|", fmt.Sprintf("%2.2f%s", (float64(c.totalErr)*100.0/float64(c.totalErr+c.totalReq)), "%"),
-		" slow: ", fmt.Sprintf("%2.2f%s", (float64(c.totalResSlow)*100.0/float64(c.totalResSlow+c.totalReq)), "%"))
+		" slow: ", fmt.Sprintf("%2.2f%s", (float64(c.totalResSlow)*100.0/float64(c.totalReq)), "%"))
 }
 
 func (c *Counter) launch(rps int64) {
