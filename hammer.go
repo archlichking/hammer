@@ -12,13 +12,12 @@ import (
 	// "encoding/json"
 	// "strconv"
 	// "sync"
+	"io/ioutil"
 	"sync/atomic"
 	"time"
-	"io/ioutil"
 
-
-	"github.com/hammer/scenario"
 	"github.com/hammer/auth"
+	"github.com/hammer/scenario"
 )
 
 // to reduce size of thread, speed up
@@ -49,7 +48,7 @@ func (c *Counter) Init() {
 
 	c.client = &http.Client{
 		Transport: &http.Transport{
-			DisableKeepAlives:   false,
+			DisableKeepAlives: false,
 		},
 	}
 }
@@ -129,8 +128,8 @@ func (c *Counter) hammer() {
 		    by doing this, hope we can save more file descriptor.
 			##
 	*/
-	
-	switch{
+
+	switch {
 	case err != nil:
 		log.Println("Response Time: ", float64(response_time)/1.0e9, " Erorr: when", call.Method, call.URL, "with error ", err)
 	case res.StatusCode >= 400 && res.StatusCode != 409:
@@ -141,11 +140,11 @@ func (c *Counter) hammer() {
 		// only do successful response here
 		c.recordRes(response_time, call.URL)
 		defer res.Body.Close()
-		if call.CallBack == nil && !debug{
+		if call.CallBack == nil && !debug {
 			return
-		}else{
+		} else {
 			data, _ := ioutil.ReadAll(res.Body)
-			if debug{
+			if debug {
 				log.Println("Req : ", call.Method, call.URL)
 				if auth_method != "none" {
 					log.Println("Authorization: ", string(req.Header.Get("Authorization")))
@@ -154,16 +153,15 @@ func (c *Counter) hammer() {
 				log.Println("Response: ", res.Status)
 				log.Println("Res Body : ", string(data))
 			}
-			if call.CallBack != nil{
+			if call.CallBack != nil {
 				call.CallBack(call.SePoint, scenario.NEXT, data)
 			}
 
 		}
 	}
 
-
 	// defer req.Body.Close()
-	
+
 }
 
 func (c *Counter) monitorHammer() {
@@ -218,14 +216,13 @@ var (
 	profileFile   string
 	profileType   string
 	slowThreshold int64
-	debug bool
-	auth_method string
-
+	debug         bool
+	auth_method   string
 
 	// profile
 	profile scenario.Profile
 
-	gree_client = new(auth.GreeClient)
+	gree_client  = new(auth.GreeClient)
 	oauth_client = new(auth.Client)
 )
 
