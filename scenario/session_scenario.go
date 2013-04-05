@@ -1,17 +1,17 @@
 package scenario
 
 import (
+	"errors"
 	"log"
 	"math/rand"
-	"errors"
 )
 
 const (
-	_             = iota
-	STEP1  int = 0
+	_         = iota
+	STEP1 int = 0
 	STEP2 int = 1
-	STEP3  int = 2
-	REST int = 100
+	STEP3 int = 2
+	REST  int = 100
 
 	NEXT int = 1
 	STAY int = 0
@@ -23,11 +23,11 @@ type GenSession func() (w float32, gc GenCall, cb GenCallBack)
 type SessionScenario struct {
 	_sessions     []*Session
 	SessionAmount int
-	_count          int
+	_count        int
 }
 
 func (ss *SessionScenario) InitFromFile(path string) {
-	
+
 }
 
 func (ss *SessionScenario) InitFromCode() {
@@ -65,8 +65,8 @@ func (ss *SessionScenario) NextCall() (*Call, error) {
 	for {
 		if i := rand.Intn(ss.SessionAmount); i >= 0 {
 			select {
-			case st := <- ss._sessions[i].StepLock :
-				switch st{
+			case st := <-ss._sessions[i].StepLock:
+				switch st {
 				case STEP1:
 					if ss._sessions[i]._calls[st].GenParam != nil {
 						ss._sessions[i]._calls[st].Method, ss._sessions[i]._calls[st].Type, ss._sessions[i]._calls[st].URL, ss._sessions[i]._calls[st].Body = ss._sessions[i]._calls[st].GenParam()
@@ -77,7 +77,7 @@ func (ss *SessionScenario) NextCall() (*Call, error) {
 					// choose a non-initialized call randomly
 					ss._sessions[i].StepLock <- REST
 					q := rand.Float32() * ss._sessions[i]._totalWeight
-					for j := STEP1+1; j < ss._sessions[i]._count; j++ {
+					for j := STEP1 + 1; j < ss._sessions[i]._count; j++ {
 						if q <= ss._sessions[i]._calls[j].RandomWeight {
 							if ss._sessions[i]._calls[j].GenParam != nil {
 								ss._sessions[i]._calls[j].Method, ss._sessions[i]._calls[j].Type, ss._sessions[i]._calls[j].URL, ss._sessions[i]._calls[j].Body = ss._sessions[i]._calls[j].GenParam()
@@ -94,6 +94,10 @@ func (ss *SessionScenario) NextCall() (*Call, error) {
 
 	log.Fatal("what? should never reach here")
 	return nil, errors.New("all sessions are being initialized")
+}
+
+func (s *SessionScenario) CustomizedReport() string {
+	return ""
 }
 
 func (ss *SessionScenario) addSession(gens []GenSession) {

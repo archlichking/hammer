@@ -8,6 +8,7 @@ type Profile interface {
 	InitFromFile(string)
 	InitFromCode()
 	NextCall() (*Call, error)
+	CustomizedReport() string
 }
 
 var scenarios = make(map[string]func() (Profile, error))

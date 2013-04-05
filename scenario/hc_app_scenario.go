@@ -143,6 +143,10 @@ func (ss *HCScenario) NextCall() (*Call, error) {
 	return nil, errors.New("all sessions are being initialized")
 }
 
+func (s *HCScenario) CustomizedReport() string {
+	return ""
+}
+
 func init() {
 	Register("hc_session", newHCScenario)
 }

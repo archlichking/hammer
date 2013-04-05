@@ -11,6 +11,7 @@ import (
 	"math/rand"
 	"net"
 	"strconv"
+	"sync/atomic"
 	"time"
 )
 
@@ -18,7 +19,9 @@ type UplinkScenario struct {
 	SessionScenario
 	SessionAmount int
 
-	_gClients []*Client
+	_gClients             []*Client
+	_totalSendCount       int64
+	_totalSendReceiveTime int64
 }
 
 type Client struct {
@@ -35,9 +38,8 @@ type Client struct {
 }
 
 type SubData struct {
-	payload struct {
-		Data string
-	}
+	Type    string `json:"type"`
+	Payload int64  `json:"payload"`
 }
 
 func (self *Client) Close() {
@@ -52,7 +54,7 @@ func (self *Client) Close() {
 	}
 }
 
-func (self *Client) Connect() {
+func (self *Client) Connect(ups *UplinkScenario) {
 	// connected as game client
 	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", self.Stream.Hostname, self.Stream.Port+30000))
 	if err != nil {
@@ -80,6 +82,28 @@ func (self *Client) Connect() {
 		self.Close()
 		return
 	}
+	ssd := new(SubData)
+	go func() {
+		var im []byte
+
+		for {
+			if err := self.socket.Receive(&im); err != nil {
+				log.Fatalln(err)
+				break
+			}
+			r := bytes.NewReader(im)
+			json.NewDecoder(r).Decode(&ssd)
+			if ssd.Payload != 0 {
+				atomic.AddInt64(&ups._totalSendCount, 1)
+				gap := time.Now().UnixNano() - ssd.Payload
+				atomic.AddInt64(&ups._totalSendReceiveTime, gap)
+			}
+		}
+
+		self.Close()
+		// log.Println(fmt.Sprintf("%2.2f%s", (float64(ups._totalReceiveTime) / float64(ups._totalSend)), "s"))
+
+	}()
 }
 
 func (ss *UplinkScenario) InitFromCode() {
@@ -116,7 +140,7 @@ func (ss *UplinkScenario) InitFromCode() {
 						r := bytes.NewReader(storage)
 
 						json.NewDecoder(r).Decode(ss._gClients[k])
-						ss._gClients[k].Connect()
+						ss._gClients[k].Connect(ss)
 					})
 			}),
 			GenSession(func() (float32, GenCall, GenCallBack) {
@@ -126,7 +150,7 @@ func (ss *UplinkScenario) InitFromCode() {
 						t1 := strconv.FormatInt(time.Now().UnixNano(), 10)
 						return "POST", "REST",
 							_HOST + "/v1/" + _HUB + "/subscribers/" + seq + "/send",
-							"{\"type\":\"test\",\"payload\":" + t1 + "}"
+							"{\"type\":\"subscribed\",\"payload\":" + t1 + "}"
 					}),
 					nil
 			}),
@@ -137,7 +161,7 @@ func (ss *UplinkScenario) InitFromCode() {
 						t1 := strconv.FormatInt(time.Now().UnixNano(), 10)
 						return "POST", "REST",
 							_HOST + "/v1/" + _HUB + "/subscribers/" + seq + "/send",
-							"{\"type\":\"test\",\"payload\":" + t1 + "}"
+							"{\"type\":\"subscribed\",\"payload\":" + t1 + "}"
 					}),
 					nil
 			}),
@@ -182,12 +206,16 @@ func (ss *UplinkScenario) NextCall() (*Call, error) {
 	return nil, errors.New("all sessions are being initialized")
 }
 
+func (s *UplinkScenario) CustomizedReport() string {
+	return fmt.Sprintf(" avg send: %2.5f%s", (float64(s._totalSendReceiveTime)/float64(s._totalSendCount))/1000000000, "s")
+}
+
 func init() {
 	Register("uplink_session", newUplinkScenario)
 }
 
 func newUplinkScenario() (Profile, error) {
 	return &UplinkScenario{
-		SessionAmount: 5,
+		SessionAmount: 100,
 	}, nil
 }

@@ -1,20 +1,20 @@
 package scenario
 
 import (
-	"os"
 	"encoding/json"
-	"strings"
+	"errors"
+	"fmt"
 	"io"
 	"log"
 	"math/rand"
-	"fmt"
-	"errors"
+	"os"
+	"strings"
 )
 
 type Scenario struct {
 	_totalWeight float32
 	_calls       []*Call
-	_count         int
+	_count       int
 }
 
 func (s *Scenario) InitFromFile(path string) {
@@ -49,14 +49,14 @@ func (s *Scenario) InitFromFile(path string) {
 func (s *Scenario) InitFromCode() {
 	s._calls = make([]*Call, 3)
 	s.addCall(5, GenCall(func(...string) (_m, _t, _u, _b string) {
-			return "POST", "REST", "http://127.0.0.1:9000/hello_in_json", "{\"fsdfsdfsdf\":\"ddddd\"}"
-		}), nil)
+		return "POST", "REST", "http://127.0.0.1:9000/hello_in_json", "{\"fsdfsdfsdf\":\"ddddd\"}"
+	}), nil)
 	s.addCall(35, GenCall(func(...string) (_m, _t, _u, _b string) {
-			return "GET", "REST", "http://127.0.0.1:9000/hello", "{}"
-		}), nil)
+		return "GET", "REST", "http://127.0.0.1:9000/hello", "{}"
+	}), nil)
 	s.addCall(60, GenCall(func(...string) (_m, _t, _u, _b string) {
-			return "GET", "REST", "http://127.0.0.1:9000/hello", "{}"
-		}), nil)
+		return "GET", "REST", "http://127.0.0.1:9000/hello", "{}"
+	}), nil)
 }
 
 func (s *Scenario) NextCall() (*Call, error) {
@@ -65,12 +65,16 @@ func (s *Scenario) NextCall() (*Call, error) {
 		if r <= s._calls[i].RandomWeight {
 			if s._calls[i].GenParam != nil {
 				s._calls[i].Method, s._calls[i].Type, s._calls[i].URL, s._calls[i].Body = s._calls[i].GenParam()
-			} 
+			}
 			return s._calls[i], nil
 		}
 	}
 
 	return nil, errors.New("something wrong with randomize number")
+}
+
+func (s *Scenario) CustomizedReport() string {
+	return ""
 }
 
 func (s *Scenario) addCall(weight float32, gp GenCall, cb GenCallBack) {
