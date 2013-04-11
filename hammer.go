@@ -3,21 +3,17 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/hammer/auth"
+	"github.com/hammer/scenario"
+	"io/ioutil"
 	"log"
 	"math/rand"
 	"net/http"
 	"net/url"
 	"runtime"
 	"strings"
-	// "encoding/json"
-	// "strconv"
-	// "sync"
-	"io/ioutil"
 	"sync/atomic"
 	"time"
-
-	"github.com/hammer/auth"
-	"github.com/hammer/scenario"
 )
 
 // to reduce size of thread, speed up
@@ -45,11 +41,26 @@ type Counter struct {
 
 // init
 func (c *Counter) Init() {
-
-	c.client = &http.Client{
-		Transport: &http.Transport{
-			DisableKeepAlives: false,
-		},
+	// set up HTTP proxy
+	if proxy != "none" {
+		proxyUrl, err := url.Parse(proxy)
+		if err != nil {
+			log.Fatal(err)
+		}
+		c.client = &http.Client{
+			Transport: &http.Transport{
+				DisableKeepAlives:   false,
+				MaxIdleConnsPerHost: 200000,
+				Proxy:               http.ProxyURL(proxyUrl),
+			},
+		}
+	} else {
+		c.client = &http.Client{
+			Transport: &http.Transport{
+				DisableKeepAlives:   false,
+				MaxIdleConnsPerHost: 200000,
+			},
+		}
 	}
 }
 
@@ -85,25 +96,11 @@ func (c *Counter) hammer() {
 	}
 
 	req, err := http.NewRequest(call.Method, call.URL, strings.NewReader(call.Body))
-
+	// log.Println(call, req, err)
 	switch auth_method {
 	case "oauth":
 		_signature := oauth_client.AuthorizationHeaderWithBodyHash(nil, call.Method, call.URL, url.Values{}, call.Body)
 		req.Header.Add("Authorization", _signature)
-	case "grees2s":
-		// gree authen here
-		// SignS2SRequest(method string, url string, body string) (string, string, error)
-		_signature, _timestamp, _ := gree_client.SignS2SRequest(call.Method, call.URL, call.Body)
-
-		req.Header.Add("Authorization", "S2S"+" realm=\"modern-war\""+
-			", signature=\""+_signature+"\", timestamp=\""+_timestamp+"\"")
-	case "greec2s":
-		// gree authen here
-		// SignS2SRequest(method string, url string, body string) (string, string, error)
-		_signature, _timestamp, _ := gree_client.SignC2SRequest(call.Method, call.URL, call.Body)
-
-		req.Header.Add("Authorization", "C2S"+" realm=\"jackpot-slots\""+
-			", signature=\""+_signature+"\", timestamp=\""+_timestamp+"\"")
 	}
 
 	// Add special haeader for PATCH, PUT and POST
@@ -112,8 +109,10 @@ func (c *Counter) hammer() {
 		switch call.Type {
 		case "REST":
 			req.Header.Set("Content-Type", "application/json; charset=utf-8")
+			break
 		case "WWW":
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			break
 		}
 	}
 
@@ -128,22 +127,25 @@ func (c *Counter) hammer() {
 		    by doing this, hope we can save more file descriptor.
 			##
 	*/
+	defer req.Body.Close()
 
 	switch {
 	case err != nil:
 		log.Println("Response Time: ", float64(response_time)/1.0e9, " Erorr: when", call.Method, call.URL, "with error ", err)
+		c.recordError()
 	case res.StatusCode >= 400 && res.StatusCode != 409:
 		log.Println("Got error code --> ", res.Status, "for call ", call.Method, " ", call.URL)
 		c.recordError()
-		return
 	default:
 		// only do successful response here
-		c.recordRes(response_time, call.URL)
 		defer res.Body.Close()
+		c.recordRes(response_time, call.URL)
+		data, _ := ioutil.ReadAll(res.Body)
 		if call.CallBack == nil && !debug {
-			return
 		} else {
-			data, _ := ioutil.ReadAll(res.Body)
+			if res.StatusCode == 409 {
+				log.Println("Http 409 Res Body : ", string(data))
+			}
 			if debug {
 				log.Println("Req : ", call.Method, call.URL)
 				if auth_method != "none" {
@@ -156,11 +158,8 @@ func (c *Counter) hammer() {
 			if call.CallBack != nil {
 				call.CallBack(call.SePoint, scenario.NEXT, data)
 			}
-
 		}
 	}
-
-	// defer req.Body.Close()
 
 }
 
@@ -219,11 +218,12 @@ var (
 	slowThreshold int64
 	debug         bool
 	auth_method   string
+	sessionAmount int
+	proxy         string
 
 	// profile
 	profile scenario.Profile
 
-	gree_client  = new(auth.GreeClient)
 	oauth_client = new(auth.Client)
 )
 
@@ -234,9 +234,8 @@ func init() {
 	flag.StringVar(&profileType, "type", "default", "Profile type (default|session|your session type)")
 	flag.BoolVar(&debug, "debug", false, "debug flag (true|false)")
 	flag.StringVar(&auth_method, "auth", "none", "Set authorization flag (oauth|gree(c|s)2s|none)")
-
-	gree_client.C2S_Secret = "a178b352cb1a8ab08f76619f27d2e739"
-	gree_client.S2S_Secret = "923ee6aa9d1096e5a366b3a987e961a7"
+	flag.IntVar(&sessionAmount, "size", 100, "session amount")
+	flag.StringVar(&proxy, "proxy", "none", "Set HTTP proxy (need to specify scheme. e.g. http://127.0.0.1:8888)")
 }
 
 // main func
@@ -250,8 +249,9 @@ func main() {
 	log.Println("rps -> ", rps)
 	log.Println("slow threshold -> ", slowThreshold, "ms")
 	log.Println("profile type -> ", profileType)
+	log.Println("Proxy -> ", proxy)
 
-	profile, _ = scenario.New(profileType)
+	profile, _ = scenario.New(profileType, sessionAmount)
 	if profileFile != "" {
 		profile.InitFromFile(profileFile)
 	} else {

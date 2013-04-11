@@ -22,7 +22,7 @@ func (s *Scenario) InitFromFile(path string) {
 
 	f, _ := os.Open(path)
 	f.Read(buf)
-
+	s._calls = make([]*Call, 100)
 	dec := json.NewDecoder(strings.NewReader(string(buf)))
 	for {
 		var m Call
@@ -35,6 +35,7 @@ func (s *Scenario) InitFromFile(path string) {
 		}
 
 		m.normalize()
+		log.Println(s._count)
 		s._calls[s._count] = &m
 
 		s._totalWeight = s._totalWeight + m.Weight
@@ -92,6 +93,6 @@ func init() {
 	Register("default", newDefaultScenario)
 }
 
-func newDefaultScenario() (Profile, error) {
+func newDefaultScenario(size int) (Profile, error) {
 	return &Scenario{}, nil
 }

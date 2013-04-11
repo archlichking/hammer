@@ -20,8 +20,11 @@ type UplinkScenario struct {
 	SessionAmount int
 
 	_gClients             []*Client
+	_gChannels            []string
 	_totalSendCount       int64
 	_totalSendReceiveTime int64
+	_totalPubCount        int64
+	_totalPubReceiveTime  int64
 }
 
 type Client struct {
@@ -35,11 +38,6 @@ type Client struct {
 		Hostname string
 		Port     int
 	}
-}
-
-type SubData struct {
-	Type    string `json:"type"`
-	Payload int64  `json:"payload"`
 }
 
 func (self *Client) Close() {
@@ -82,7 +80,10 @@ func (self *Client) Connect(ups *UplinkScenario) {
 		self.Close()
 		return
 	}
-	ssd := new(SubData)
+	ssd := new(struct {
+		Type    string `json:"type"`
+		Payload int64  `json:"payload"`
+	})
 	go func() {
 		var im []byte
 
@@ -94,9 +95,16 @@ func (self *Client) Connect(ups *UplinkScenario) {
 			r := bytes.NewReader(im)
 			json.NewDecoder(r).Decode(&ssd)
 			if ssd.Payload != 0 {
-				atomic.AddInt64(&ups._totalSendCount, 1)
 				gap := time.Now().UnixNano() - ssd.Payload
-				atomic.AddInt64(&ups._totalSendReceiveTime, gap)
+				switch ssd.Type {
+				case "send":
+					atomic.AddInt64(&ups._totalSendCount, 1)
+					atomic.AddInt64(&ups._totalSendReceiveTime, gap)
+				case "pub":
+					atomic.AddInt64(&ups._totalPubCount, 1)
+					atomic.AddInt64(&ups._totalPubReceiveTime, gap)
+				}
+
 			}
 		}
 
@@ -109,15 +117,27 @@ func (self *Client) Connect(ups *UplinkScenario) {
 func (ss *UplinkScenario) InitFromCode() {
 	ss._sessions = make([]*Session, ss.SessionAmount)
 
-	// _HOST := "http://172.30.52.157:8080"
-	_HOST := "http://192.168.1.100:8080"
+	_HOST := "http://172.30.52.154:8080"
+	// _HOST := "http://192.168.1.100:8080"
 	_HUB := "war-of-nations"
 	ss._gClients = make([]*Client, ss.SessionAmount)
+	// hold ss.SeesionAmount client connections to uplink stream
 	for i, _ := range ss._gClients {
 		ss._gClients[i] = new(Client)
 		ss._gClients[i].id = strconv.Itoa(i + 1)
 		ss._gClients[i].hub = _HUB
 	}
+
+	ss._gChannels = make([]string, 100)
+	// initialize 10 channels
+	var s string = "{\"channels\":["
+	for i, _ := range ss._gChannels {
+		ss._gChannels[i] = "/cc/" + strconv.Itoa(i+1)
+		s += "\"" + ss._gChannels[i] + "\","
+	}
+	s = s[:len(s)-1]
+	s += "]}"
+	// log.Println(s)
 
 	for i := 0; i < ss.SessionAmount; i++ {
 		ss.addSession([]GenSession{
@@ -126,10 +146,9 @@ func (ss *UplinkScenario) InitFromCode() {
 				seq := strconv.Itoa(i + 1)
 				return 0,
 					GenCall(func(ps ...string) (_m, _t, _u, _b string) {
-
 						return "POST", "REST",
 							_HOST + "/v1/" + _HUB + "/subscribers/" + seq,
-							"{\"channels\": [\"/cc/1\", \"/cc/2\"]}"
+							s
 					}),
 					GenCallBack(func(se *Session, st int, storage []byte) {
 						se.InternalLock.Lock()
@@ -150,18 +169,17 @@ func (ss *UplinkScenario) InitFromCode() {
 						t1 := strconv.FormatInt(time.Now().UnixNano(), 10)
 						return "POST", "REST",
 							_HOST + "/v1/" + _HUB + "/subscribers/" + seq + "/send",
-							"{\"type\":\"subscribed\",\"payload\":" + t1 + "}"
+							"{\"type\":\"send\",\"payload\":" + t1 + "}"
 					}),
 					nil
 			}),
 			GenSession(func() (float32, GenCall, GenCallBack) {
-				seq := strconv.Itoa(i + 1)
 				return 50,
 					GenCall(func(ps ...string) (_m, _t, _u, _b string) {
 						t1 := strconv.FormatInt(time.Now().UnixNano(), 10)
 						return "POST", "REST",
-							_HOST + "/v1/" + _HUB + "/subscribers/" + seq + "/send",
-							"{\"type\":\"subscribed\",\"payload\":" + t1 + "}"
+							_HOST + "/v1/" + _HUB + "/channels" + ss._gChannels[rand.Intn(len(ss._gChannels))] + "/publish",
+							"{\"type\":\"pub\",\"payload\":" + t1 + "}"
 					}),
 					nil
 			}),
@@ -207,15 +225,17 @@ func (ss *UplinkScenario) NextCall() (*Call, error) {
 }
 
 func (s *UplinkScenario) CustomizedReport() string {
-	return fmt.Sprintf(" avg send: %2.5f%s", (float64(s._totalSendReceiveTime)/float64(s._totalSendCount))/1000000000, "s")
+	return fmt.Sprintf(" {avg [send: %2.5fs|publish: %2.5fs]}",
+		(float64(s._totalSendReceiveTime)/float64(s._totalSendCount))/1000000000,
+		(float64(s._totalPubReceiveTime)/float64(s._totalPubCount))/1000000000)
 }
 
 func init() {
 	Register("uplink_session", newUplinkScenario)
 }
 
-func newUplinkScenario() (Profile, error) {
+func newUplinkScenario(size int) (Profile, error) {
 	return &UplinkScenario{
-		SessionAmount: 100,
+		SessionAmount: size,
 	}, nil
 }

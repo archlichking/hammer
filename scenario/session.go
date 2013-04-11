@@ -2,18 +2,17 @@ package scenario
 
 import (
 	"sync"
-	// "log"
 )
 
 type Session struct {
 	_totalWeight float32
 	_calls       []*Call
-	_count         int
+	_count       int
 
-	State int
-	StepLock chan int
+	State        int
+	StepLock     chan int
 	InternalLock sync.Mutex
-	Storage map[string]string
+	Storage      map[string]string
 }
 
 func (s *Session) UpdateStateAndStorage(st int, storage ...string) {

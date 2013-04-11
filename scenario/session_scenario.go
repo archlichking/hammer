@@ -11,6 +11,8 @@ const (
 	STEP1 int = 0
 	STEP2 int = 1
 	STEP3 int = 2
+	STEP4 int = 3
+	STEP5 int = 4
 	REST  int = 100
 
 	NEXT int = 1
@@ -101,7 +103,6 @@ func (s *SessionScenario) CustomizedReport() string {
 }
 
 func (ss *SessionScenario) addSession(gens []GenSession) {
-
 	ss._sessions[ss._count] = new(Session)
 	ss._sessions[ss._count].StepLock = make(chan int, 1)
 	ss._sessions[ss._count].StepLock <- STEP1
@@ -119,8 +120,8 @@ func init() {
 	Register("session", newSessionScenario)
 }
 
-func newSessionScenario() (Profile, error) {
+func newSessionScenario(size int) (Profile, error) {
 	return &SessionScenario{
-		SessionAmount: 10,
+		SessionAmount: size,
 	}, nil
 }

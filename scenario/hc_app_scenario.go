@@ -18,7 +18,8 @@ type HCScenario struct {
 func (ss *HCScenario) InitFromCode() {
 	ss._sessions = make([]*Session, ss.SessionAmount)
 
-	_HOST := "http://23.20.148.107" // HC qa1
+	//_HOST := "http://23.20.148.107" // HC qa1
+	_HOST := "http://50.16.169.7" // HC qa3
 	_GAME := "/hc"
 
 	for i := 0; i < ss.SessionAmount; i++ {
@@ -43,11 +44,11 @@ func (ss *HCScenario) InitFromCode() {
 					GenCallBack(func(se *Session, st int, storage []byte) {
 						se.InternalLock.Lock()
 						defer se.InternalLock.Unlock()
-						se.State += st
-						se.StepLock <- se.State
 						seq, _ := strconv.ParseInt(se.Storage["seq"], 10, 64)
 						atomic.AddInt64(&seq, 1)
 						se.Storage["seq"] = strconv.FormatInt(seq, 10)
+						se.State += st
+						se.StepLock <- se.State
 					})
 			}),
 			GenSession(func() (float32, GenCall, GenCallBack) {
@@ -83,6 +84,29 @@ func (ss *HCScenario) InitFromCode() {
 					})
 			}),
 			GenSession(func() (float32, GenCall, GenCallBack) {
+				return 0,
+					GenCall(func(ps ...string) (_m, _t, _u, _b string) {
+						return "POST",
+							"REST",
+							_HOST + _GAME + "/index.php/json_gateway?svc=BatchController.call",
+							`[{"_explicitType":"Session","iphone_udid":"` +
+								_UDID + `","start_sequence_num":"` + ps[0] +
+								`","client_build":"10","client_version":"1.0","transaction_time":"1362768794","api_version":"1","player_id":` + ps[1] + `,"end_sequence_num":"` + ps[0] +
+								`","game_name":"HCGame","req_id":"1","session_id":"3777470"},` +
+								`[{"_explicitType":"Command","params":[],"method":"subscribe","service":"uplinkservice.uplinkservice","sequence_num":` + ps[0] + `}]]`
+					}),
+					GenCallBack(func(se *Session, st int, storage []byte) {
+						se.InternalLock.Lock()
+						defer se.InternalLock.Unlock()
+						// add 1 to seq number
+						seq, _ := strconv.ParseInt(se.Storage["seq"], 10, 64)
+						atomic.AddInt64(&seq, 1)
+						se.Storage["seq"] = strconv.FormatInt(seq, 10)
+						se.State += st
+						se.StepLock <- se.State
+					})
+			}),
+			GenSession(func() (float32, GenCall, GenCallBack) {
 				return 100,
 					GenCall(func(ps ...string) (_m, _t, _u, _b string) {
 						return "POST",
@@ -107,10 +131,10 @@ func (ss *HCScenario) NextCall() (*Call, error) {
 			select {
 			case st := <-ss._sessions[i].StepLock:
 				switch st {
-				case STEP1, STEP2:
+				case STEP1, STEP2, STEP3:
 					// execute session call for the first time
 					if ss._sessions[i]._calls[st].GenParam != nil {
-						ss._sessions[i]._calls[st].Method, ss._sessions[i]._calls[st].Type, ss._sessions[i]._calls[st].URL, ss._sessions[i]._calls[st].Body = ss._sessions[i]._calls[st].GenParam(ss._sessions[i].Storage["seq"])
+						ss._sessions[i]._calls[st].Method, ss._sessions[i]._calls[st].Type, ss._sessions[i]._calls[st].URL, ss._sessions[i]._calls[st].Body = ss._sessions[i]._calls[st].GenParam(ss._sessions[i].Storage["seq"], ss._sessions[i].Storage["player_id"])
 					}
 
 					return ss._sessions[i]._calls[st], nil
@@ -118,7 +142,8 @@ func (ss *HCScenario) NextCall() (*Call, error) {
 					// choose a non-initialized call randomly
 					ss._sessions[i].StepLock <- REST
 					q := rand.Float32() * ss._sessions[i]._totalWeight
-					for j := STEP2 + 1; j < ss._sessions[i]._count; j++ {
+					//for j := STEP2 + 1; j < ss._sessions[i]._count; j++ {
+					for j := STEP3 + 1; j < ss._sessions[i]._count; j++ {
 						if q <= ss._sessions[i]._calls[j].RandomWeight {
 							// add 1 to seq
 							ss._sessions[i].InternalLock.Lock()
@@ -151,8 +176,8 @@ func init() {
 	Register("hc_session", newHCScenario)
 }
 
-func newHCScenario() (Profile, error) {
+func newHCScenario(size int) (Profile, error) {
 	return &HCScenario{
-		SessionAmount: 5,
+		SessionAmount: size,
 	}, nil
 }
