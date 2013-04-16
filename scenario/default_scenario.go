@@ -60,8 +60,8 @@ func (s *Scenario) InitFromCode() {
 	}), nil)
 }
 
-func (s *Scenario) NextCall() (*Call, error) {
-	r := rand.Float32() * s._totalWeight
+func (s *Scenario) NextCall(rg *rand.Rand) (*Call, error) {
+	r := rg.Float32() * s._totalWeight
 	for i := 0; i < s._count; i++ {
 		if r <= s._calls[i].RandomWeight {
 			if s._calls[i].GenParam != nil {

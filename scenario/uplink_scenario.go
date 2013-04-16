@@ -117,8 +117,8 @@ func (self *Client) Connect(ups *UplinkScenario) {
 func (ss *UplinkScenario) InitFromCode() {
 	ss._sessions = make([]*Session, ss.SessionAmount)
 
-	_HOST := "http://172.30.52.154:8080"
-	// _HOST := "http://192.168.1.100:8080"
+	_HOST := "http://172.30.52.232:8080"
+	// _HOST := "http://192.168.1.138:8080"
 	_HUB := "war-of-nations"
 	ss._gClients = make([]*Client, ss.SessionAmount)
 	// hold ss.SeesionAmount client connections to uplink stream
@@ -187,9 +187,9 @@ func (ss *UplinkScenario) InitFromCode() {
 	}
 }
 
-func (ss *UplinkScenario) NextCall() (*Call, error) {
+func (ss *UplinkScenario) NextCall(rg *rand.Rand) (*Call, error) {
 	for {
-		if i := rand.Intn(ss.SessionAmount); i >= 0 {
+		if i := rg.Intn(ss.SessionAmount); i >= 0 {
 			select {
 			case st := <-ss._sessions[i].StepLock:
 				switch st {
@@ -203,7 +203,7 @@ func (ss *UplinkScenario) NextCall() (*Call, error) {
 				default:
 					// choose a non-initialized call randomly
 					ss._sessions[i].StepLock <- REST
-					q := rand.Float32() * ss._sessions[i]._totalWeight
+					q := rg.Float32() * ss._sessions[i]._totalWeight
 					for j := STEP1 + 1; j < ss._sessions[i]._count; j++ {
 						if q <= ss._sessions[i]._calls[j].RandomWeight {
 							// add 1 to seq

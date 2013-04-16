@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/hammer/auth"
+	"github.com/hammer/counter"
 	"github.com/hammer/scenario"
 	"io/ioutil"
 	"log"
@@ -12,7 +13,6 @@ import (
 	"net/url"
 	"runtime"
 	"strings"
-	"sync/atomic"
 	"time"
 )
 
@@ -23,24 +23,32 @@ const SizePerThread = 10000000
 
 // Counter will be an atomic, to count the number of request handled
 // which will be used to print PPS, etc.
-type Counter struct {
-	totalReq     int64 // total # of request
-	totalResTime int64 // total response time
-	totalErr     int64 // how many error
-	totalResSlow int64 // how many slow response
-	totalSend    int64
-
-	lastSend int64
-	lastReq  int64
+type Hammer struct {
+	counter *counter.Counter
+	db_load *counter.MysqlC
 
 	client  *http.Client
 	monitor *time.Ticker
 	// ideally error should be organized by type TODO
-	throttle <-chan time.Time
+	throttle    <-chan time.Time
+	db_throttle <-chan time.Time
 }
 
 // init
-func (c *Counter) Init() {
+func (c *Hammer) Init() {
+	c.counter = new(counter.Counter)
+	c.db_load = new(counter.MysqlC)
+	c.db_load.Init("load_log")
+
+	c.db_load.Open(counter.MysqlConfig{
+		Mysql: struct {
+			Host, User, Password string
+		}{
+			Host:     "127.0.0.1:3306",
+			User:     "root",
+			Password: "",
+		},
+	})
 	// set up HTTP proxy
 	if proxy != "none" {
 		proxyUrl, err := url.Parse(proxy)
@@ -64,31 +72,11 @@ func (c *Counter) Init() {
 	}
 }
 
-// increase the count and record response time.
-func (c *Counter) recordRes(_time int64, method string) {
-	atomic.AddInt64(&c.totalReq, 1)
-	atomic.AddInt64(&c.totalResTime, _time)
-
-	// if longer that 200ms, it is a slow response
-	if _time > slowThreshold*1000000 {
-		atomic.AddInt64(&c.totalResSlow, 1)
-		log.Println("slow response -> ", float64(_time)/1.0e9, method)
-	}
-}
-
-func (c *Counter) recordError() {
-	atomic.AddInt64(&c.totalErr, 1)
-}
-
-func (c *Counter) recordSend() {
-	atomic.AddInt64(&c.totalSend, 1)
-}
-
 // main goroutine to drive traffic
-func (c *Counter) hammer() {
+func (c *Hammer) hammer(rg *rand.Rand) {
 	// before send out, update send count
-	c.recordSend()
-	call, err := profile.NextCall()
+	c.counter.RecordSend()
+	call, err := profile.NextCall(rg)
 
 	if err != nil {
 		log.Println("next call error: ", err)
@@ -132,14 +120,14 @@ func (c *Counter) hammer() {
 	switch {
 	case err != nil:
 		log.Println("Response Time: ", float64(response_time)/1.0e9, " Erorr: when", call.Method, call.URL, "with error ", err)
-		c.recordError()
+		c.counter.RecordError()
 	case res.StatusCode >= 400 && res.StatusCode != 409:
 		log.Println("Got error code --> ", res.Status, "for call ", call.Method, " ", call.URL)
-		c.recordError()
+		c.counter.RecordError()
 	default:
 		// only do successful response here
 		defer res.Body.Close()
-		c.recordRes(response_time, call.URL)
+		c.counter.RecordRes(response_time, slowThreshold, call.URL)
 		data, _ := ioutil.ReadAll(res.Body)
 		if call.CallBack == nil && !debug {
 		} else {
@@ -163,41 +151,29 @@ func (c *Counter) hammer() {
 
 }
 
-func (c *Counter) monitorHammer() {
-	sps := c.totalSend - c.lastSend
-	pps := c.totalReq - c.lastReq
-	backlog := c.totalSend - c.totalReq - c.totalErr
-
-	atomic.StoreInt64(&c.lastReq, c.totalReq)
-	atomic.StoreInt64(&c.lastSend, c.totalSend)
-
-	avgT := float64(c.totalResTime) / (float64(c.totalReq) * 1.0e9)
-
-	log.Println(
-		" total: ", fmt.Sprintf("%4d", c.totalSend),
-		" req/s: ", fmt.Sprintf("%4d", sps),
-		" res/s: ", fmt.Sprintf("%4d", pps),
-		" avg: ", fmt.Sprintf("%2.4f", avgT),
-		" pending: ", backlog,
-		" err:", c.totalErr,
-		"|", fmt.Sprintf("%2.2f%s", (float64(c.totalErr)*100.0/float64(c.totalErr+c.totalReq)), "%"),
-		" slow: ", fmt.Sprintf("%2.2f%s", (float64(c.totalResSlow)*100.0/float64(c.totalReq)), "%"),
-		profile.CustomizedReport())
+func (c *Hammer) monitorHammer() {
+	log.Println(c.counter.GeneralStat(), profile.CustomizedReport())
 }
 
-func (c *Counter) launch(rps int64) {
+func (c *Hammer) launch(rps int64) {
 	// var _rps time.Duration
 
 	_p := time.Duration(rps)
 	_interval := 1000000000.0 / _p
 	c.throttle = time.Tick(_interval * time.Nanosecond)
+	c.db_throttle = time.Tick(3 * time.Second)
 	// var wg sync.WaitGroup
 
 	log.Println("run with rps -> ", int(_p))
 	go func() {
+		i := 0
 		for {
+			if i == 8 {
+				i = 0
+			}
 			<-c.throttle
-			go c.hammer()
+			go c.hammer(rands[i])
+			i++
 		}
 	}()
 
@@ -206,6 +182,14 @@ func (c *Counter) launch(rps int64) {
 		for {
 			<-c.monitor.C // rate limit for monitor routine
 			go c.monitorHammer()
+		}
+	}()
+
+	// db flush
+	go func() {
+		for {
+			<-c.db_throttle
+			c.db_load.Flush(c.counter)
 		}
 	}()
 }
@@ -221,6 +205,8 @@ var (
 	sessionAmount int
 	proxy         string
 
+	// rands
+	rands []*rand.Rand
 	// profile
 	profile scenario.Profile
 
@@ -243,7 +229,15 @@ func main() {
 
 	flag.Parse()
 	NCPU := runtime.NumCPU()
-	runtime.GOMAXPROCS(NCPU + 3)
+	runtime.GOMAXPROCS(2)
+
+	// to speed up
+	rands = make([]*rand.Rand, NCPU)
+	for i, _ := range rands {
+		s := rand.NewSource(time.Now().UnixNano())
+		rands[i] = rand.New(s)
+		rands[i].Seed(time.Now().UnixNano())
+	}
 
 	log.Println("cpu number -> ", NCPU)
 	log.Println("rps -> ", rps)
@@ -260,10 +254,10 @@ func main() {
 
 	rand.Seed(time.Now().UnixNano())
 
-	counter := new(Counter)
-	counter.Init()
+	ham := new(Hammer)
+	ham.Init()
 
-	go counter.launch(rps)
+	go ham.launch(rps)
 
 	var input string
 	fmt.Scanln(&input)

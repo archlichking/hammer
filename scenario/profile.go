@@ -2,12 +2,13 @@ package scenario
 
 import (
 	"errors"
+	"math/rand"
 )
 
 type Profile interface {
 	InitFromFile(string)
 	InitFromCode()
-	NextCall() (*Call, error)
+	NextCall(*rand.Rand) (*Call, error)
 	CustomizedReport() string
 }
 
