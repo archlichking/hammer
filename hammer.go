@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"runtime"
+	// "strconv"
 	"strings"
 	"time"
 )
@@ -37,18 +38,23 @@ type Hammer struct {
 // init
 func (c *Hammer) Init() {
 	c.counter = new(counter.Counter)
-	c.db_load = new(counter.MysqlC)
-	c.db_load.Init("load_log")
+	if databaseLog {
+		// if enable database
+		c.db_load = new(counter.MysqlC)
+		log.Println(fmt.Sprintf("Log saves as --> %s_%d", profileType, rps))
+		c.db_load.Init(fmt.Sprintf("%s_%d", profileType, rps))
 
-	c.db_load.Open(counter.MysqlConfig{
-		Mysql: struct {
-			Host, User, Password string
-		}{
-			Host:     "127.0.0.1:3306",
-			User:     "root",
-			Password: "",
-		},
-	})
+		c.db_load.Connect(counter.MysqlConfig{
+			Mysql: struct {
+				Host, User, Password string
+			}{
+				Host:     "127.0.0.1:3306",
+				User:     "root",
+				Password: "",
+			},
+		})
+		c.db_load.CreateEmptyTable()
+	}
 	// set up HTTP proxy
 	if proxy != "none" {
 		proxyUrl, err := url.Parse(proxy)
@@ -186,12 +192,15 @@ func (c *Hammer) launch(rps int64) {
 	}()
 
 	// db flush
-	go func() {
-		for {
-			<-c.db_throttle
-			c.db_load.Flush(c.counter)
-		}
-	}()
+	if databaseLog {
+		// enable db log
+		go func() {
+			for {
+				<-c.db_throttle
+				c.db_load.Flush(c.counter)
+			}
+		}()
+	}
 }
 
 // init the program from command line
@@ -204,6 +213,7 @@ var (
 	auth_method   string
 	sessionAmount int
 	proxy         string
+	databaseLog   bool
 
 	// rands
 	rands []*rand.Rand
@@ -219,9 +229,11 @@ func init() {
 	flag.Int64Var(&slowThreshold, "threshold", 200, "Set slowness standard (in millisecond)")
 	flag.StringVar(&profileType, "type", "default", "Profile type (default|session|your session type)")
 	flag.BoolVar(&debug, "debug", false, "debug flag (true|false)")
+	flag.BoolVar(&databaseLog, "dblog", false, "save log to database for furture use")
 	flag.StringVar(&auth_method, "auth", "none", "Set authorization flag (oauth|gree(c|s)2s|none)")
 	flag.IntVar(&sessionAmount, "size", 100, "session amount")
 	flag.StringVar(&proxy, "proxy", "none", "Set HTTP proxy (need to specify scheme. e.g. http://127.0.0.1:8888)")
+
 }
 
 // main func
@@ -229,7 +241,7 @@ func main() {
 
 	flag.Parse()
 	NCPU := runtime.NumCPU()
-	runtime.GOMAXPROCS(2)
+	runtime.GOMAXPROCS(NCPU)
 
 	// to speed up
 	rands = make([]*rand.Rand, NCPU)

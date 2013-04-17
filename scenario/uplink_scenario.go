@@ -117,7 +117,7 @@ func (self *Client) Connect(ups *UplinkScenario) {
 func (ss *UplinkScenario) InitFromCode() {
 	ss._sessions = make([]*Session, ss.SessionAmount)
 
-	_HOST := "http://172.30.52.232:8080"
+	_HOST := "http://172.30.52.230:8080"
 	// _HOST := "http://192.168.1.138:8080"
 	_HUB := "war-of-nations"
 	ss._gClients = make([]*Client, ss.SessionAmount)
