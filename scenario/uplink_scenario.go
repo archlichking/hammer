@@ -2,15 +2,21 @@ package scenario
 
 import (
 	"bytes"
+	// "code.google.com/p/go.net/websocket"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"git.gree-dev.net/growth-revenue/uplink/stream/message"
-	"git.gree-dev.net/growth-revenue/uplink/stream/socket"
+	"github.com/garyburd/go-websocket/websocket"
+	"io"
+	"io/ioutil"
 	"log"
 	"math/rand"
 	"net"
+	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -30,9 +36,9 @@ type UplinkScenario struct {
 type Client struct {
 	id     string
 	hub    string
-	socket socket.Interface
 	closed bool
-
+	// c     *net.Conn
+	// ws     *websocket.Conn
 	Token  string
 	Stream struct {
 		Hostname string
@@ -47,23 +53,31 @@ func (self *Client) Close() {
 
 	self.closed = true
 
-	if self.socket != nil {
-		self.socket.Close()
-	}
+	// if self.ws != nil {
+	// 	self.ws.Close()
+	// }
 }
 
 func (self *Client) Connect(ups *UplinkScenario) {
-	// connected as game client
-	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", self.Stream.Hostname, self.Stream.Port+30000))
+	// var err error
+	c, err := net.Dial("tcp", fmt.Sprintf("%s:%d", self.Stream.Hostname, self.Stream.Port))
 	if err != nil {
-		log.Println(err)
+		log.Println("in initialize ws 1", err)
+	}
+	u, _ := url.Parse(fmt.Sprintf("ws://%s:%d/websocket", self.Stream.Hostname, self.Stream.Port))
+	// connected as game client
+	// self.ws, err = websocket.Dial(fmt.Sprintf("ws://%s:%d/websocket", self.Stream.Hostname, self.Stream.Port),
+	// "", fmt.Sprintf("http://%s:%d", self.Stream.Hostname, self.Stream.Port))
+	ws, _, err := websocket.NewClient(c, u, http.Header{"Origin": {fmt.Sprintf("%s:%d", self.Stream.Hostname, self.Stream.Port+30000)}}, 1024, 1024)
+	if err != nil {
+		log.Println("in initialize ws", err)
 		self.Close()
 		return
 	}
-	self.socket = socket.NewSocket(conn)
+	// self.socket = socket.NewSocket(conn)
 
 	// Subscribe on stream.
-	err = self.socket.SendJSON(&message.Outgoing{
+	da, _ := json.Marshal(&message.Outgoing{
 		Type: "subscribe",
 		Payload: struct {
 			ID    string `json:"id"`
@@ -75,24 +89,38 @@ func (self *Client) Connect(ups *UplinkScenario) {
 			Token: self.Token,
 		},
 	})
+	// _, err = self.ws.Write(da)
+	// err = websocket.Message.Send(self.ws, da)
+	w, err := ws.NextWriter(websocket.OpText)
 	if err != nil {
-		log.Println(err)
+		log.Println("in sending ws", err)
 		self.Close()
 		return
 	}
+	io.WriteString(w, string(da))
+	w.Close()
+	// ws.SetReadDeadline(time.Now().Add(1000000 * time.Second))
 	ssd := new(struct {
 		Type    string `json:"type"`
 		Payload int64  `json:"payload"`
 	})
+
 	go func() {
-		var im []byte
+		// var im []byte
 
 		for {
-			if err := self.socket.Receive(&im); err != nil {
-				log.Fatalln(err)
+			_, r, err := ws.NextReader()
+			if err != nil {
+				log.Println("NextReader: %v", err)
+				// break
+			}
+			b, err := ioutil.ReadAll(r)
+			if err != nil {
+				log.Println("ReadAll: %v", err)
 				break
 			}
-			r := bytes.NewReader(im)
+			// log.Println(string(b))
+			r = bytes.NewReader(b)
 			json.NewDecoder(r).Decode(&ssd)
 			if ssd.Payload != 0 {
 				gap := time.Now().UnixNano() - ssd.Payload
@@ -114,18 +142,15 @@ func (self *Client) Connect(ups *UplinkScenario) {
 	}()
 }
 
-func (ss *UplinkScenario) InitFromCode() {
+func (ss *UplinkScenario) InitFromCode(sessionUrl string) {
+	// sample sessionURL := "http://192.168.1.138:8080/v1/war-of-nations"
 	ss._sessions = make([]*Session, ss.SessionAmount)
-
-	_HOST := "http://172.30.52.230:8080"
-	// _HOST := "http://192.168.1.138:8080"
-	_HUB := "war-of-nations"
 	ss._gClients = make([]*Client, ss.SessionAmount)
 	// hold ss.SeesionAmount client connections to uplink stream
 	for i, _ := range ss._gClients {
 		ss._gClients[i] = new(Client)
 		ss._gClients[i].id = strconv.Itoa(i + 1)
-		ss._gClients[i].hub = _HUB
+		ss._gClients[i].hub = sessionUrl[strings.LastIndex(sessionUrl, "/")+1 : len(sessionUrl)]
 	}
 
 	ss._gChannels = make([]string, 100)
@@ -147,7 +172,7 @@ func (ss *UplinkScenario) InitFromCode() {
 				return 0,
 					GenCall(func(ps ...string) (_m, _t, _u, _b string) {
 						return "POST", "REST",
-							_HOST + "/v1/" + _HUB + "/subscribers/" + seq,
+							sessionUrl + "/subscribers/" + seq,
 							s
 					}),
 					GenCallBack(func(se *Session, st int, storage []byte) {
@@ -164,21 +189,21 @@ func (ss *UplinkScenario) InitFromCode() {
 			}),
 			GenSession(func() (float32, GenCall, GenCallBack) {
 				seq := strconv.Itoa(i + 1)
-				return 50,
+				return 85,
 					GenCall(func(ps ...string) (_m, _t, _u, _b string) {
 						t1 := strconv.FormatInt(time.Now().UnixNano(), 10)
 						return "POST", "REST",
-							_HOST + "/v1/" + _HUB + "/subscribers/" + seq + "/send",
+							sessionUrl + "/subscribers/" + seq + "/send",
 							"{\"type\":\"send\",\"payload\":" + t1 + "}"
 					}),
 					nil
 			}),
 			GenSession(func() (float32, GenCall, GenCallBack) {
-				return 50,
+				return 0,
 					GenCall(func(ps ...string) (_m, _t, _u, _b string) {
 						t1 := strconv.FormatInt(time.Now().UnixNano(), 10)
 						return "POST", "REST",
-							_HOST + "/v1/" + _HUB + "/channels" + ss._gChannels[rand.Intn(len(ss._gChannels))] + "/publish",
+							sessionUrl + "/channels" + ss._gChannels[rand.Intn(len(ss._gChannels))] + "/publish",
 							"{\"type\":\"pub\",\"payload\":" + t1 + "}"
 					}),
 					nil

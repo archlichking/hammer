@@ -15,12 +15,12 @@ type HCScenario struct {
 	SessionAmount int
 }
 
-func (ss *HCScenario) InitFromCode() {
-	ss._sessions = make([]*Session, ss.SessionAmount)
+func (ss *HCScenario) InitFromCode(sessionUrl string) {
+	// sample sessionURL := "http://50.16.169.7/hc"
 
+	ss._sessions = make([]*Session, ss.SessionAmount)
 	//_HOST := "http://23.20.148.107" // HC qa1
-	_HOST := "http://50.16.169.7" // HC qa3
-	_GAME := "/hc"
+	// _HOST := "http://50.16.169.7" // HC qa3
 
 	for i := 0; i < ss.SessionAmount; i++ {
 		/*
@@ -34,7 +34,7 @@ func (ss *HCScenario) InitFromCode() {
 					GenCall(func(ps ...string) (_m, _t, _u, _b string) {
 						return "POST",
 							"REST",
-							_HOST + _GAME + "/index.php/json_gateway?svc=BatchController.authenticate_iphone",
+							sessionUrl + "/index.php/json_gateway?svc=BatchController.authenticate_iphone",
 							`[{"app_uuid":"` + _UDID + `","udid":"` + _UDID + `","mac_address":"macaddr6"},` +
 								`{"seconds_from_gmt":-28800,"game_name":"HCGame","client_version":"1.0","session_id":"3115749","ios_version":"iOS 5.0.1",` +
 								`"data_connection_type":"WiFi","client_build":"10","transaction_time":"1362176918","device_type":"iPod Touch 4G",` +
@@ -56,7 +56,7 @@ func (ss *HCScenario) InitFromCode() {
 					GenCall(func(ps ...string) (_m, _t, _u, _b string) {
 						return "POST",
 							"REST",
-							_HOST + _GAME + "/index.php/json_gateway?svc=BatchController.call",
+							sessionUrl + "/index.php/json_gateway?svc=BatchController.call",
 							`[{"_explicitType":"Session","iphone_udid":"` +
 								_UDID + `","start_sequence_num":"` + ps[0] +
 								`","client_build":"10","client_version":"1.0","transaction_time":"1362768794","api_version":"1","player_id":null,"end_sequence_num":"` + ps[0] +
@@ -88,7 +88,7 @@ func (ss *HCScenario) InitFromCode() {
 					GenCall(func(ps ...string) (_m, _t, _u, _b string) {
 						return "POST",
 							"REST",
-							_HOST + _GAME + "/index.php/json_gateway?svc=BatchController.call",
+							sessionUrl + "/index.php/json_gateway?svc=BatchController.call",
 							`[{"_explicitType":"Session","iphone_udid":"` +
 								_UDID + `","start_sequence_num":"` + ps[0] +
 								`","client_build":"10","client_version":"1.0","transaction_time":"1362768794","api_version":"1","player_id":` + ps[1] + `,"end_sequence_num":"` + ps[0] +
@@ -111,7 +111,7 @@ func (ss *HCScenario) InitFromCode() {
 					GenCall(func(ps ...string) (_m, _t, _u, _b string) {
 						return "POST",
 							"REST",
-							_HOST + _GAME + "/index.php/json_gateway?svc=BatchController.call",
+							sessionUrl + "/index.php/json_gateway?svc=BatchController.call",
 							`[{"_explicitType":"Session","iphone_udid":"` +
 								_UDID + `","start_sequence_num":"` + ps[0] +
 								`","client_build":"10","client_version":"1.0","transaction_time":"1360797513","api_version":"1","player_id":"` +

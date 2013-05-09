@@ -32,14 +32,15 @@ func (ss *SessionScenario) InitFromFile(path string) {
 
 }
 
-func (ss *SessionScenario) InitFromCode() {
+func (ss *SessionScenario) InitFromCode(sessionUrl string) {
+	// only used for sample sessionUrl := "http://127.0.0.1:9000/"
 	ss._sessions = make([]*Session, ss.SessionAmount)
 	for i := 0; i < ss.SessionAmount; i++ {
 		ss.addSession([]GenSession{
 			GenSession(func() (float32, GenCall, GenCallBack) {
 				return 0,
 					GenCall(func(...string) (_m, _t, _u, _b string) {
-						return "POST", "REST", "http://127.0.0.1:9000/hello_in_json", "{\"fsdfsdfsdf\":\"ddddd\"}"
+						return "POST", "REST", sessionUrl + "/hello_in_json", "{\"fsdfsdfsdf\":\"ddddd\"}"
 					}),
 					GenCallBack(func(se *Session, st int, storage []byte) {
 						se.UpdateStateAndStorage(st, "string-key", string(storage))
@@ -48,14 +49,14 @@ func (ss *SessionScenario) InitFromCode() {
 			GenSession(func() (float32, GenCall, GenCallBack) {
 				return 55,
 					GenCall(func(...string) (_m, _t, _u, _b string) {
-						return "GET", "REST", "http://127.0.0.1:9000/hello", "{}"
+						return "GET", "REST", sessionUrl + "/hello", "{}"
 					}),
 					nil
 			}),
 			GenSession(func() (float32, GenCall, GenCallBack) {
 				return 45,
 					GenCall(func(...string) (_m, _t, _u, _b string) {
-						return "GET", "REST", "http://127.0.0.1:9000/hello", "{}"
+						return "GET", "REST", sessionUrl + "/hello", "{}"
 					}),
 					nil
 			}),

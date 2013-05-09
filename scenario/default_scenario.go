@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	// "log"
 	"math/rand"
 	"os"
 	"strings"
@@ -34,20 +34,21 @@ func (s *Scenario) InitFromFile(path string) {
 			break
 		}
 
+		// check if we have BODY/URL regexp here
+		m.parseRegexp()
+
 		m.normalize()
-		log.Println(s._count)
 		s._calls[s._count] = &m
 
 		s._totalWeight = s._totalWeight + m.Weight
 		s._calls[s._count].RandomWeight = s._totalWeight
-		log.Print(s._calls[s._count])
 
 		s._count++
 		fmt.Printf("Import Call -> W: %f URL: %s  Method: %s\n", m.Weight, m.URL, m.Method)
 	}
 }
 
-func (s *Scenario) InitFromCode() {
+func (s *Scenario) InitFromCode(sessionUrl string) {
 	s._calls = make([]*Call, 3)
 	s.addCall(5, GenCall(func(...string) (_m, _t, _u, _b string) {
 		return "POST", "REST", "http://127.0.0.1:9000/hello_in_json", "{\"fsdfsdfsdf\":\"ddddd\"}"
@@ -66,6 +67,7 @@ func (s *Scenario) NextCall(rg *rand.Rand) (*Call, error) {
 		if r <= s._calls[i].RandomWeight {
 			if s._calls[i].GenParam != nil {
 				s._calls[i].Method, s._calls[i].Type, s._calls[i].URL, s._calls[i].Body = s._calls[i].GenParam()
+				// log.Println(s._calls[i].Method, s._calls[i].Type, s._calls[i].URL, s._calls[i].Body)
 			}
 			return s._calls[i], nil
 		}

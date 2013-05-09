@@ -99,3 +99,32 @@ func (m *MysqlC) Flush(c *Counter) error {
 
 	return nil
 }
+
+func (m *MysqlC) QueryAll(tn string) ([]CounterDisplay, error) {
+	rows, err := m.db.Query(fmt.Sprintf(`select * from %s`, tn))
+	if err != nil {
+		return nil, err
+	}
+	displayCs := []CounterDisplay{}
+
+	for rows.Next() {
+		var d CounterDisplay
+
+		err = rows.Scan(&d.ID,
+			&d.TOTAL_SEND,
+			&d.TOTAL_REQ,
+			&d.REQ_PS,
+			&d.RES_PS,
+			&d.TOTAL_RES_SLOW,
+			&d.TOTAL_RES_ERR,
+			&d.TOTAL_RES_TIME,
+			&d.TIME_CREATED)
+
+		if err != nil {
+			return nil, err
+		}
+		displayCs = append(displayCs, d)
+	}
+
+	return displayCs, nil
+}

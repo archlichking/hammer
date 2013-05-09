@@ -25,7 +25,7 @@ func (c *Counter) RecordRes(_time int64, slowThreshold int64, method string) {
 	atomic.AddInt64(&c.totalResTime, _time)
 
 	// if longer that 200ms, it is a slow response
-	if _time > slowThreshold*1000000 {
+	if _time > slowThreshold*1.0e6 {
 		atomic.AddInt64(&c.totalResSlow, 1)
 		// log.Println("slow response -> ", float64(_time)/1.0e9, method)
 	}
@@ -54,12 +54,13 @@ func (c *Counter) GetBacklog() int64 {
 func (c *Counter) GeneralStat() string {
 	c.sps = c.totalSend - c.lastSend
 	c.rps = c.totalReq - c.lastReq
+
 	avgT := float64(c.totalResTime) / (float64(c.totalReq) * 1.0e9)
 
 	atomic.StoreInt64(&c.lastSend, c.totalSend)
 	atomic.StoreInt64(&c.lastReq, c.totalReq)
 
-	return fmt.Sprintf(" total: %s req/s: %s res/s: %s avg: %s pending: %d err: %d|%s slow: %s rg: %d",
+	return fmt.Sprintf(" total: %s req/s: %s res/s: %s avg: %s pending: %d err: %d|%s slow: %d|%s rg: %d",
 		fmt.Sprintf("%4d", c.totalSend),
 		fmt.Sprintf("%4d", c.sps),
 		fmt.Sprintf("%4d", c.rps),
@@ -67,6 +68,19 @@ func (c *Counter) GeneralStat() string {
 		c.GetBacklog(),
 		c.totalErr,
 		fmt.Sprintf("%2.2f%s", (float64(c.totalErr)*100.0/float64(c.totalErr+c.totalReq)), "%"),
+		c.totalResSlow,
 		fmt.Sprintf("%2.2f%s", (float64(c.totalResSlow)*100.0/float64(c.totalReq)), "%"),
 		runtime.NumGoroutine())
+}
+
+func (c *Counter) GetAllStat() []int64 {
+	return []int64{
+		c.totalReq,
+		c.totalErr,
+		c.totalResSlow,
+		c.sps,
+		c.rps,
+		c.totalResTime / (c.totalReq * 1.0e3),
+		c.totalSend,
+	}
 }

@@ -5,7 +5,6 @@ import (
 	"log"
 	"math/rand"
 	"strconv"
-	// "sync/atomic"
 	"time"
 )
 
@@ -16,7 +15,9 @@ type WorldServerScenario struct {
 	_hex_cache [][]chan int64
 }
 
-func (ss *WorldServerScenario) InitFromCode() {
+func (ss *WorldServerScenario) InitFromCode(sessionUrl string) {
+	// sample sessionURL := "http://10.214.75.115:58888/v1/"
+
 	ss._sessions = make([]*Session, ss.SessionAmount)
 
 	ss._hex_cache = make([][]chan int64, ss.SessionAmount)
@@ -45,7 +46,7 @@ func (ss *WorldServerScenario) InitFromCode() {
 
 						v = <-ss._hex_cache[x][y]
 						return "POST", "REST",
-							"http://localhost:58888/v1/transaction",
+							sessionUrl + "/transaction",
 							"{\"set\":{\"hexes\":[{\"x\":" + strconv.Itoa(x) +
 								",\"y\":" + strconv.Itoa(y) + ",\"version\":" +
 								strconv.FormatInt(v, 10) + ",\"data\":{\"dude\":" +
@@ -66,7 +67,7 @@ func (ss *WorldServerScenario) InitFromCode() {
 						// log.Println("2 call gen", x, v, stamp)
 						v = <-ss._hex_cache[x][y]
 						return "POST", "REST",
-							"http://localhost:58888/v1/transaction",
+							sessionUrl + "/transaction",
 							"{\"set\":{\"hexes\":[{\"x\":" + strconv.Itoa(x) +
 								",\"y\":" + strconv.Itoa(y) + ",\"version\":" +
 								strconv.FormatInt(v, 10) + ",\"data\":{\"dude\":" +
@@ -81,7 +82,7 @@ func (ss *WorldServerScenario) InitFromCode() {
 					GenCall(func(ps ...string) (_m, _t, _u, _b string) {
 
 						return "GET", "REST",
-							"http://localhost:58888/v1/hexes/" + strconv.Itoa(x) +
+							sessionUrl + "/hexes/" + strconv.Itoa(x) +
 								"," + strconv.Itoa(y),
 							""
 					}),

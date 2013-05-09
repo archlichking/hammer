@@ -5,14 +5,16 @@ import (
 	"fmt"
 	"github.com/hammer/auth"
 	"github.com/hammer/counter"
+	"github.com/hammer/logg"
 	"github.com/hammer/scenario"
+	"html/template"
 	"io/ioutil"
 	"log"
 	"math/rand"
 	"net/http"
 	"net/url"
 	"runtime"
-	// "strconv"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -26,35 +28,18 @@ const SizePerThread = 10000000
 // which will be used to print PPS, etc.
 type Hammer struct {
 	counter *counter.Counter
-	db_load *counter.MysqlC
 
 	client  *http.Client
 	monitor *time.Ticker
 	// ideally error should be organized by type TODO
-	throttle    <-chan time.Time
-	db_throttle <-chan time.Time
+	throttle <-chan time.Time
+	// counterArray [][]int64
 }
 
 // init
 func (c *Hammer) Init() {
 	c.counter = new(counter.Counter)
-	if databaseLog {
-		// if enable database
-		c.db_load = new(counter.MysqlC)
-		log.Println(fmt.Sprintf("Log saves as --> %s_%d", profileType, rps))
-		c.db_load.Init(fmt.Sprintf("%s_%d", profileType, rps))
-
-		c.db_load.Connect(counter.MysqlConfig{
-			Mysql: struct {
-				Host, User, Password string
-			}{
-				Host:     "127.0.0.1:3306",
-				User:     "root",
-				Password: "",
-			},
-		})
-		c.db_load.CreateEmptyTable()
-	}
+	// c.counterArray = make([][]int64, 0)
 	// set up HTTP proxy
 	if proxy != "none" {
 		proxyUrl, err := url.Parse(proxy)
@@ -63,9 +48,9 @@ func (c *Hammer) Init() {
 		}
 		c.client = &http.Client{
 			Transport: &http.Transport{
-				DisableKeepAlives:   false,
-				MaxIdleConnsPerHost: 200000,
-				Proxy:               http.ProxyURL(proxyUrl),
+				// DisableKeepAlives:   false,
+				// MaxIdleConnsPerHost: 200000,
+				Proxy: http.ProxyURL(proxyUrl),
 			},
 		}
 	} else {
@@ -165,19 +150,19 @@ func (c *Hammer) launch(rps int64) {
 	// var _rps time.Duration
 
 	_p := time.Duration(rps)
-	_interval := 1000000000.0 / _p
+	_interval := 1.0e9 / _p
 	c.throttle = time.Tick(_interval * time.Nanosecond)
-	c.db_throttle = time.Tick(3 * time.Second)
 	// var wg sync.WaitGroup
 
 	log.Println("run with rps -> ", int(_p))
 	go func() {
 		i := 0
 		for {
-			if i == 8 {
+			if i == len(rands) {
 				i = 0
 			}
 			<-c.throttle
+
 			go c.hammer(rands[i])
 			i++
 		}
@@ -191,34 +176,63 @@ func (c *Hammer) launch(rps int64) {
 		}
 	}()
 
-	// db flush
-	if databaseLog {
-		// enable db log
-		go func() {
-			for {
-				<-c.db_throttle
-				c.db_load.Flush(c.counter)
-			}
-		}()
+	// do log here, so either db, file or no save only display during load test
+	log_intv := time.Tick(time.Duration(logIntv) * time.Second)
+	go func() {
+		for {
+			<-log_intv
+			logger.Log(c.counter.GetAllStat(), logIntv)
+		}
+	}()
+}
+func (c *Hammer) health(rw http.ResponseWriter, req *http.Request) {
+	rw.Header().Set("Content-Type", "application/json")
+	rw.Header().Set("Content-Length", strconv.Itoa(len("health")))
+	rw.WriteHeader(200)
+	rw.Write([]byte("health"))
+}
+
+func (c *Hammer) log(rw http.ResponseWriter, req *http.Request) {
+	p := struct {
+		Title string
+		Data  string
+	}{
+		Title: fmt.Sprintf(
+			"Performance Log [type:%s rps:%d size:%d slow:%d]",
+			profileType,
+			rps,
+			sessionAmount,
+			slowThreshold),
+		Data: logger.Read(),
 	}
+	t, _ := template.ParseFiles("log.tpl")
+	t.Execute(rw, p)
 }
 
 // init the program from command line
 var (
-	rps           int64
-	profileFile   string
-	profileType   string
-	slowThreshold int64
-	debug         bool
-	auth_method   string
-	sessionAmount int
-	proxy         string
-	databaseLog   bool
+	rps              int64
+	profileFile      string
+	profileType      string
+	slowThreshold    int64
+	debug            bool
+	auth_method      string
+	auth_key         string
+	sessionAmount    int
+	sessionUrlPrefix string
+	proxy            string
+
+	chisel bool
+
+	logIntv int
+	logType string
+
+	// profile
+	profile scenario.Profile
+	logger  logg.Logger
 
 	// rands
 	rands []*rand.Rand
-	// profile
-	profile scenario.Profile
 
 	oauth_client = new(auth.Client)
 )
@@ -229,10 +243,14 @@ func init() {
 	flag.Int64Var(&slowThreshold, "threshold", 200, "Set slowness standard (in millisecond)")
 	flag.StringVar(&profileType, "type", "default", "Profile type (default|session|your session type)")
 	flag.BoolVar(&debug, "debug", false, "debug flag (true|false)")
-	flag.BoolVar(&databaseLog, "dblog", false, "save log to database for furture use")
 	flag.StringVar(&auth_method, "auth", "none", "Set authorization flag (oauth|gree(c|s)2s|none)")
+	flag.StringVar(&auth_key, "key", "", "Set authorization key")
 	flag.IntVar(&sessionAmount, "size", 100, "session amount")
+	flag.StringVar(&sessionUrlPrefix, "url", "", "Session url prefix")
 	flag.StringVar(&proxy, "proxy", "none", "Set HTTP proxy (need to specify scheme. e.g. http://127.0.0.1:8888)")
+	flag.IntVar(&logIntv, "intv", 6, "Log interval in chart")
+	flag.StringVar(&logType, "ltype", "default", "Log type (file|db)")
+	flag.BoolVar(&chisel, "chisel", false, "adjust rps dynamically")
 
 }
 
@@ -248,29 +266,41 @@ func main() {
 	for i, _ := range rands {
 		s := rand.NewSource(time.Now().UnixNano())
 		rands[i] = rand.New(s)
-		rands[i].Seed(time.Now().UnixNano())
 	}
 
 	log.Println("cpu number -> ", NCPU)
 	log.Println("rps -> ", rps)
 	log.Println("slow threshold -> ", slowThreshold, "ms")
 	log.Println("profile type -> ", profileType)
-	log.Println("Proxy -> ", proxy)
+	log.Println("proxy -> ", proxy)
+	log.Println("auth method-> ", auth_method)
+	log.Println("auth key -> ", auth_key)
 
 	profile, _ = scenario.New(profileType, sessionAmount)
 	if profileFile != "" {
 		profile.InitFromFile(profileFile)
 	} else {
-		profile.InitFromCode()
+		profile.InitFromCode(sessionUrlPrefix)
 	}
+
+	logger, _ = logg.NewLogger(logType, fmt.Sprintf("%s_%d_%d_%d", profileType, rps, sessionAmount, slowThreshold))
 
 	rand.Seed(time.Now().UnixNano())
 
-	ham := new(Hammer)
-	ham.Init()
+	hamm := new(Hammer)
+	hamm.Init()
 
-	go ham.launch(rps)
+	go hamm.launch(rps)
+
+	http.HandleFunc("/log", hamm.log)
+	http.HandleFunc("/health", hamm.health)
+	http.ListenAndServe(":9090", nil)
 
 	var input string
-	fmt.Scanln(&input)
+	for {
+		fmt.Scanln(&input)
+		if input == "exit" {
+			break
+		}
+	}
 }

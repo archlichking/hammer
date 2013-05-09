@@ -7,7 +7,7 @@ import (
 
 type Profile interface {
 	InitFromFile(string)
-	InitFromCode()
+	InitFromCode(string)
 	NextCall(*rand.Rand) (*Call, error)
 	CustomizedReport() string
 }
