@@ -20,7 +20,7 @@ type Counter struct {
 }
 
 // increase the count and record response time.
-func (c *Counter) RecordRes(_time int64, slowThreshold int64, method string) {
+func (c *Counter) RecordRes(_time int64, slowThreshold int64) {
 	atomic.AddInt64(&c.totalReq, 1)
 	atomic.AddInt64(&c.totalResTime, _time)
 

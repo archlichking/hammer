@@ -1,0 +1,22 @@
+{
+  "Client": "http",
+  "Scenarios": [
+    {
+      "Weight": 100,
+      "Type": "call",
+      "Groups": [
+        {
+          "Weight": 100,
+          "Calls": [
+            {
+              "URL": "http://localhost:3000/timestamp",
+              "Method": "GET",
+              "BodyType": "STRING",
+              "Body": null
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

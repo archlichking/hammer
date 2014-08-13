@@ -1,0 +1,22 @@
+{
+  "Client": "http",
+  "Scenarios": [
+    {
+      "Weight": 100,
+      "Type": "call",
+      "Groups": [
+        {
+          "Weight": 100,
+          "Calls": [
+            {
+              "URL": "https://mobile.walmart.com/m/j?service=Authentication&method=guestLogin&e=1",
+              "Method": "GET",
+              "BodyType": "STRING",
+              "Body": null
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

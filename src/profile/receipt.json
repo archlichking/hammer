@@ -1,0 +1,29 @@
+{
+  "Client": "socket",
+  "Scenarios": [
+    {
+      "Weight": 100,
+      "Type": "call",
+      "Groups": [
+        {
+          "Weight": 100,
+          "Calls": [
+            {
+              "Host": "mobile.walmart.com",
+              "Port": "8888",
+              "Range": 32,
+              "Store": 9998,
+              "Item": [
+                {
+                  "Upc": "0063748007560",
+                  "Name": "Leis Hammer",
+                  "Price": 9999
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

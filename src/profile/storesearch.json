@@ -1,0 +1,36 @@
+{
+  "Variables": {
+    "QUERY": [
+      "Pad",
+      "games",
+      "Shoes",
+      "Tea",
+      "Milk",
+      "step stool"
+    ],
+    "STORE": [
+      "1",
+      "2"
+    ]
+  },
+  "Scenarios": [
+    {
+      "Weight": 100,
+      "Type": "call",
+      "Groups": [
+        {
+          "Weight": 100,
+          "Calls": [
+            {
+              "URL": "http://dfw-origin.search.mobile.walmart.com/search?query=${QUERY}&store=${STORE}",
+              "Method": "GET",
+              "Type": "HTTP",
+              "BodyType": "STRING",
+              "Body": null
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

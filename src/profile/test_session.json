@@ -1,0 +1,55 @@
+{
+  "Client": "http",
+  "Scenarios": [
+    {
+      "Weight": 100,
+      "Type": "session",
+      "Groups": [
+        {
+          "Weight": 50,
+          "Calls": [
+            {
+              "URL": "https://mobile.walmart.com/m/j?service=Authentication&method=guestLogin&e=1",
+              "Method": "POST",
+              "BodyType": "STRING",
+              "Body": null
+            },
+            {
+              "URL": "https://mobile.walmart.com/m/j?service=Authentication&method=guestLogin&e=2",
+              "Method": "POST",
+              "BodyType": "STRING",
+              "Body": null
+            },{
+              "URL": "https://mobile.walmart.com/m/j?service=Authentication&method=guestLogin&e=3",
+              "Method": "POST",
+              "BodyType": "STRING",
+              "Body": null
+            }
+          ]
+        },
+        {
+          "Weight": 50,
+          "Calls": [
+            {
+              "URL": "https://mobile.walmart.com/m/j?service=Authentication&method=guestLogin&e=4",
+              "Method": "POST",
+              "BodyType": "STRING",
+              "Body": null
+            },
+            {
+              "URL": "https://mobile.walmart.com/m/j?service=Authentication&method=guestLogin&e=5",
+              "Method": "POST",
+              "BodyType": "STRING",
+              "Body": null
+            },{
+              "URL": "https://mobile.walmart.com/m/j?service=Authentication&method=guestLogin&e=6",
+              "Method": "POST",
+              "BodyType": "STRING",
+              "Body": null
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

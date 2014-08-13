@@ -1,2 +1,0 @@
-{"Weight": 70, "URL":"http://localhost:9988/post", "Method":"POST", "Body":"{\"hahaha _random_range_(1,1000000,x), _value_of_(x), _random_range_(1,1000000)\"}", "Type":"REST"}
-{"Weight": 30, "URL":"http://localhost:9988/post", "Method":"POST", "Body":"{\"kkkkkk \"}", "Type":"REST"}

@@ -1,0 +1,121 @@
+{
+  "Client": "http",
+  "Scenarios": [
+    {
+      "Weight": 100,
+      "Type": "session",
+      "Groups": [
+        {
+          "Weight": 100,
+          "Calls": [
+            {
+              "URL": "https://perfmobile.walmart.com/m/j?service=Authentication&method=login&e=1",
+              "Method": "POST",
+              "BodyType": "STRING",
+              "Body": "p1=test1@test2.com&p2=testtest&p3=true&p4=1",
+              "Header": {
+                "Content-Type": "application/x-www-form-urlencoded"
+              }
+            },
+            {
+              "URL": "https://photos-s2.mobile.walmart.com/v1/photos",
+              "Header": {
+                "Authorization": "Basic MkBlcC5jb206dGVzdHRlc3Q=",
+                "Content-Type": "image/jpeg",
+                "Photo-Id": "HoBSIiG8ahTe26z6BAFFnnRCzbd0WX",
+                "Connection":"keep-alive"
+              },
+              "Method": "PUT",
+              "BodyType":"FILE",
+              "Body": "/Users/lzhu9/Develop/performance-services/golang/src/profile/file.jpg"
+            },
+            {
+              "URL": "https://photos-s2.mobile.walmart.com/v1/photos",
+              "Header": {
+                "Authorization": "Basic MkBlcC5jb206dGVzdHRlc3Q=",
+                "Content-Type": "image/jpeg",
+                "Photo-Id": "HoBSIiG8ahTe26z6BAFFnnRCzbd0WX",
+                "Connection":"keep-alive"
+              },
+              "Method": "PUT",
+              "BodyType":"FILE",
+              "Body": "/Users/lzhu9/Develop/performance-services/golang/src/profile/file.jpg"
+            },
+            {
+              "URL": "https://photos-s2.mobile.walmart.com/v1/photos",
+              "Header": {
+                "Authorization": "Basic MkBlcC5jb206dGVzdHRlc3Q=",
+                "Content-Type": "image/jpeg",
+                "Photo-Id": "HoBSIiG8ahTe26z6BAFFnnRCzbd0WX",
+                "Connection":"keep-alive"
+              },
+              "Method": "PUT",
+              "BodyType":"FILE",
+              "Body": "/Users/lzhu9/Develop/performance-services/golang/src/profile/file.jpg"
+            },
+            {
+              "URL": "https://photos-s2.mobile.walmart.com/v1/photos",
+              "Header": {
+                "Authorization": "Basic MkBlcC5jb206dGVzdHRlc3Q=",
+                "Content-Type": "image/jpeg",
+                "Photo-Id": "HoBSIiG8ahTe26z6BAFFnnRCzbd0WX",
+                "Connection":"keep-alive"
+              },
+              "Method": "PUT",
+              "BodyType":"FILE",
+              "Body": "/Users/lzhu9/Develop/performance-services/golang/src/profile/file.jpg"
+            },
+            {
+              "URL": "https://photos-s2.mobile.walmart.com/v1/photos",
+              "Header": {
+                "Authorization": "Basic MkBlcC5jb206dGVzdHRlc3Q=",
+                "Content-Type": "image/jpeg",
+                "Photo-Id": "HoBSIiG8ahTe26z6BAFFnnRCzbd0WX",
+                "Connection":"keep-alive"
+              },
+              "Method": "PUT",
+              "BodyType":"FILE",
+              "Body": "/Users/lzhu9/Develop/performance-services/golang/src/profile/file.jpg"
+            },
+            {
+              "URL": "https://photos-s2.mobile.walmart.com/v1/photos",
+              "Header": {
+                "Authorization": "Basic MkBlcC5jb206dGVzdHRlc3Q=",
+                "Content-Type": "image/jpeg",
+                "Photo-Id": "HoBSIiG8ahTe26z6BAFFnnRCzbd0WX",
+                "Connection":"keep-alive"
+              },
+              "Method": "PUT",
+              "BodyType":"FILE",
+              "Body": "/Users/lzhu9/Develop/performance-services/golang/src/profile/file.jpg"
+            },
+            {
+              "URL": "https://photos-s2.mobile.walmart.com/v1/photos",
+              "Header": {
+                "Authorization": "Basic MkBlcC5jb206dGVzdHRlc3Q=",
+                "Content-Type": "image/jpeg",
+                "Photo-Id": "HoBSIiG8ahTe26z6BAFFnnRCzbd0WX",
+                "Connection":"keep-alive"
+              },
+              "Method": "PUT",
+              "BodyType":"FILE",
+              "Body": "/Users/lzhu9/Develop/performance-services/golang/src/profile/file.jpg"
+            },
+            {
+              "URL": "https://photos-s2.mobile.walmart.com/v1/photos",
+              "Header": {
+                "Authorization": "Basic MkBlcC5jb206dGVzdHRlc3Q=",
+                "Content-Type": "image/jpeg",
+                "Photo-Id": "HoBSIiG8ahTe26z6BAFFnnRCzbd0WX",
+                "Connection":"keep-alive"
+              },
+              "Method": "PUT",
+              "BodyType":"FILE",
+              "Body": "/Users/lzhu9/Develop/performance-services/golang/src/profile/file.jpg"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

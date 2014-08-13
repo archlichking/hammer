@@ -1,0 +1,857 @@
+package eReceipts.server.service;
+
+option java_generic_services = true;
+
+//! Options for throttling how many receipts get sent to the server
+//! from the SMART server
+message CommsConfig {
+
+    enum OperationMode {
+
+          //! Send all receipts
+          NORMAL = 1;
+
+          //! Send only MSCO receipts
+          MSCO_ONLY = 2;
+
+          //! Don't send any receipts
+          OFF = 3;
+
+          //! Send all MSCO receipts and every 2nd non-msco receipt
+          ALL_MSCO_AND_EVERY_2ND_OTHER = 4;
+
+          //! Send all MSCO receipts and every 10th non-msco receipt
+          ALL_MSCO_AND_EVERY_10TH_OTHER = 5;
+
+          //! Send all MSCO receipts and every 30th non-msco receipt
+          ALL_MSCO_AND_EVERY_30TH_OTHER = 6;
+    };
+
+    required OperationMode operation_mode = 1;
+
+    //! Maximum number of receipts to queue on SMART when in normal
+    //! mode. This is basically a sanity variable and should rarely
+    //! change.
+    optional int32 max_queue_length_normal_operation = 2 [default = 100];
+
+    //! Maximum number of receipts to queue on SMART when in any
+    //! operation mode but NORMAL
+    optional int32 max_queue_length_non_normal_operation = 3 [default = 10];
+
+    //! The maximum number of receipts to send to the server in
+    //! each request
+    optional int32 max_send_batch_size = 4 [default = 10];
+};
+
+message KeyValue {
+
+   required string key = 1;
+
+   required string value = 2;
+};
+
+//! Used in both ISPItem (ISP -> Server) and ReceiptItem (Server ->
+//! ISP).  Most data is "whatever they give us, we give them" except
+//! quantity_sold and quantity_returned which are calculated by Tony/Adam.
+message SimplifiedReturns {
+
+   //! Only populated as part of ReceiptItem and Not ISPItem.  Calculated by eReceipts team.
+   optional int32 quantity_sold = 1 [default = 1];
+
+   //! Only populated as part of ReceiptItem and Not ISPItem.  Calculated be eReceipts team.
+   optional int32 quantity_returned = 2 [default = 0];
+
+   //! Opaque to eReceipts
+   optional string tax_flags = 3 [default = ''];
+
+   //! Opaque to eReceipts
+   optional string discount = 4 [default = ''];
+
+   //! Opaque to eReceipts
+   optional string serial_number = 5 [default = ''];
+
+   //! Opaque to eReceipts
+   optional string item_sequence = 6 [default = ''];
+
+   //! Opaque to eReceipts
+   optional string item_type = 7 [default = ''];
+
+   //! Opaque to eReceipts
+   optional string linked_to = 8 [default = ''];
+
+   //! Opaque to eReceipts
+   optional string taxes_applied = 9 [default = ''];
+
+   //! Opaque to eReceipts
+   optional string original_price = 10 [default = ''];
+
+   //! Opaque to eReceipts
+   optional string discount_percent = 11 [default = ''];
+
+   //! Opaque to eReceipts
+   optional string return_reason = 12 [default = ''];
+
+   //! Opaque to eReceipts
+   repeated KeyValue optional_data = 13;
+
+   //! UPC
+   optional string upc_as_scanned = 14 [default = ''];
+};
+
+//! Information from lookup up a UPC against the CISAM database
+message ISPItem {
+
+    //! This is now "UPCPrinted"
+    required string raw_product_code = 1;
+
+    //! This is now "ItemNbr"
+    optional string item_id = 2;
+
+    //! This is now "UPCScanned"
+    optional string win_number = 3;
+
+    //! A short description that is hopefully better than what is on the receipt (CISAM)
+    optional string short_description = 4;
+
+    //! A long description that is hopefully much better than what is on the receipt (CISAM)
+    optional string long_description = 5;
+
+    //! The department code.  Server should have mapping to good english string.
+    optional string department = 6;
+
+    //! Not populated yet but might be gettable.
+    optional string aisle_location = 7;
+
+    // DEPRECATED. see SimplifiedReturns message
+    optional string tax_flags = 8;
+
+    // DEPRECATED. see SimplifiedReturns message
+    optional string discount = 9;
+
+    // DEPRECATED. see SimplifiedReturns message
+    optional string serial_number = 10;
+
+    optional SimplifiedReturns simplified_returns = 11;
+
+    // One hour guarantee item was swapped out.  This is the original UPC for marking picked up
+    optional string one_hour_guarantee_original_upc = 12;
+};
+
+//! A specific line of text on a receipt including meta data and optional
+//! information about the item as looked up on the ISP by UPC code
+message ReceiptLine {
+
+    //! The raw text of the line
+    required string text = 1;
+
+    //! Whether this line should be printed at double the size
+    optional bool is_double_size = 2;
+
+    //! Whether the text of this line should be drawn as a barcode
+    optional bool is_barcode = 3;
+
+    //! How many extra carriage returns to put after this line. (defaults to 0)
+    optional int32 line_advance = 4;
+
+    // DEPRECATED and never used.  All UPCs and Item numbers are now in unassigned_purchased_items.
+    optional ISPItem item = 5;
+
+    optional int32 mask = 6;
+};
+
+message GiftReceipt {
+
+    //! The actual content of the receipt.
+    repeated ReceiptLine receipt_lines = 1;
+
+};
+
+//! Payload sent from the ISP to the eReceipt server for each receipt
+//! captured.
+message ISPReceipt {
+
+    //! If MSCO, ruid is the basket id. If standalone eReceipts, this
+    //! is RUID (Random unique id) of the receipt as generated by the
+    //! fep e.g. BQTWpNpW5-lLKX-LJmB-CnJT-DYMOmGksmFI.  62^32
+    //! combinations
+    required string ruid = 1;
+
+    //! The actual content of the receipt.
+    repeated ReceiptLine receipt_lines = 2;
+
+    //! Whether or not this receipt is from a Mobile Self-Checkout (MSCO)
+    //! transaction
+    optional bool is_msco = 3 [default = false];
+
+    //! unix timestamp according to the ISP Server
+    required uint32 isp_timestamp = 4;
+
+    // DEPRICATED - now fep_timestamp
+    optional string register_timestamp = 5;
+
+    //! Walmart's 20-25 digit TC Number
+    //! NOTE: This is not reliable when sent from the ISP. The TC number
+    //!       should instead be parsed from the receipt text
+    optional string tc_number = 6;
+
+    //! The ID of the register where the transaction occured
+    optional string register_id = 7;
+
+    //! Which template was used for the image was printed on the receipt.
+    optional string template_id = 8;
+
+    //! The phonen number read from the debit card reader
+    optional string customer_phone_number = 9;
+
+    //! The url printed on the stub (if any) e.g. https://wmt.co/ruvc789
+    optional string short_url = 10;
+
+    //! Gathered from the CISAM database on the SMART server. Should
+    //! be either WMSC (Walmart Super Center) or SAMS (Sam's Club) or
+    //! WMGM (Walmart Greedy Manticore)
+    optional string business_type = 11;
+
+    //! Sam's club membership number or any other Walmart subsidiary's
+    //! membership number
+    optional string membership_number = 12;
+
+    //! Unix Timestamp according to the fep
+    optional uint32 fep_timestamp = 13;
+
+    //! Now that we get printed UPCs, all UPCs supplied to us will be in here and the search is done server side.
+    repeated ISPItem unassigned_purchased_items = 14;
+
+    //! Which A/B setup was used on the debit card reader
+    optional string card_reader_profile = 15;
+
+    //! Sequence of events that the user took on the card reader for analytics purposes
+    repeated string card_reader_analytics_event = 16;
+
+    //! If presetn, the MD5 sum of the header/logo image.  This should
+    //! match the MD5 sum of one of the images in
+    //! StaticImageDataRequest
+    optional string header_image_md5 = 17;
+
+    //! As per header_image_md5 but for a footer
+    optional string footer_image_md5 = 18;
+
+    //! At least Sam's club puts the survey into an image for faster
+    //! printing (stored on printer).
+    optional string survey_image_md5 = 19;
+
+    optional bool customer_wants_sms = 20 [default = false];
+
+    //! Gift receipts (if any)
+    repeated GiftReceipt gift_receipts = 21;
+
+    //! Is there at least one 1HourGuarantee virtual item on this receipt?
+    optional bool has_one_hour_guarantee_virtual_items = 22;
+
+    //! The 16 digit gift card number. Sent on purchase of virtual item.
+    optional string one_hour_guarantee_gift_card_number = 23;
+
+    //! When the 1HG item is picked up a new receipt is issued.  This
+    //! is a linkage TCNumber to the receipt that had the virtual
+    //! items above.  i.e. the receipt that
+    //! has_one_hour_guarantee_virtual_items is true
+    optional string one_hour_guarantee_original_tc_number = 24;
+};
+
+message UploadReceiptRequest {
+
+    //! We can upload more than one receipt at a time.  Max in batch is
+    //! specified in HeartbeatResponse
+    repeated ISPReceipt receipts = 1;
+};
+
+message UploadReceiptResponse {
+
+   // Nothing.
+};
+
+message ReceiptItem {
+
+   required string ruid = 1;
+
+   required string item_number = 2;
+
+   required string upc = 3;
+
+   required string name_on_receipt = 4;
+
+   required int32 price_in_cents = 5;
+
+   optional int32 saver_rebate_given_cents = 6;
+
+   optional int32 saver_return_price_cents = 7;
+
+   optional SimplifiedReturns simplified_returns = 8;
+};
+
+// 1309 additional returns functionality
+message ReceiptForReturn {
+
+    repeated ReceiptItem returnable_items = 1;
+
+    repeated ReceiptItem non_returnable_items = 2;
+
+    required string ruid = 3;
+
+    // As per receipt e.g. MM/DD/YYYY (not including time)
+    required string date = 4;
+
+    //! e.g "5260"
+    required string store_number = 5;
+
+    required int32 total_in_cents = 6;
+
+    required string tc_number = 7;
+
+};
+
+message StoredReceipt {
+
+    //! The actual content of the receipt.  Do not bother with the
+    //! ISPItem.
+    repeated ReceiptLine receipt_lines = 1;
+};
+
+message CustomerReceiptsRequest {
+
+   //! Was a bad move making this required.  Will pass "empty" when its Sam's club
+   required string phone_number = 1;
+
+   optional int32 max_receipts = 2  [default = 10];
+
+   // Filter receipts by a UPC
+   optional string upc = 3;
+
+   //! Sam's club membership number or any other Walmart subsidiary's
+   //! membership number
+   optional string membership_number = 4;
+
+   //! yyyyMMdd.  Only include receipts that are on or after this date.  Format is same as POS supplies fep.
+   optional string from_date = 5;
+
+   //! yyyyMMdd.  Only include receipts that are on or before this date.  Format is same as POS supplies fep.
+   optional string to_date = 6;
+};
+
+message CustomerReceiptsResponse {
+
+   repeated ReceiptForReturn receipts = 1;
+
+};
+
+message ReceiptForReturnRequest {
+
+   required string tc_number = 1;
+
+};
+
+message ReceiptForReturnResponse {
+
+   optional ReceiptForReturn receipt = 1;
+
+};
+
+message ReceiptHistoryRequest {
+
+    //! Walmart's 20-25 digit TC Number as scanned off paper receipt,
+    //! eReceipt or keyed in by associate.
+    required string tc_number = 1;
+
+    //! Just a summary of returned and returnable or a full history?
+    required bool summary_format = 2;
+};
+
+message ReceiptHistoryResponse {
+
+    //! Note: We've been told that TC Numbers can collide due to a 20
+    //! year old bug.  The server needs to do some smarts to detect
+    //! and remove collisions based on things like date, location, is
+    //! it a return receipt etc.
+    optional StoredReceipt receipt = 1;
+};
+
+
+//! POS need this info for OneHourGuarantee pickups flow
+message OneHourGuaranteeVirtualItem
+{
+    //! Matches the printed UPC for the virtual item on the original receipt.
+    required string upc_printed = 1;
+
+    //! The price in cents on the original receipt
+    required int32 price_in_cents = 2;
+
+    //! Has this item already been picked up?  i.e. we need to mark
+    //! pickups in ISPReceipt.one_hg_original_tc_number.
+    optional bool has_been_picked_up = 3 [default = false];
+}
+
+//! The "virtual" gift card that is printed on the receipt for the
+//! customer to spend on their 1HourGuarantee item
+message OneHourGuaranteeGiftCard
+{
+
+   //! 16 digit number.  PIN is NOT sent up in structured.  No idea if
+   //! it is printed on receipt.
+   required string number = 1;
+}
+
+//! 1407 1HourGuarantee Additions.
+message OneHourGuaranteeLookup
+{
+    // As per receipt e.g. MM/DD/YYYY (not including time)
+    required string date = 1;
+
+    //! e.g "5260"
+    required string store_number = 2;
+
+    required int32 total_in_cents = 3;
+
+   //! All the 1HG virtual items on the original receipt.
+   repeated OneHourGuaranteeVirtualItem virtual_items = 4;
+
+   //! Gift card printed on original receipt (see
+   //! ISPReceipt.one_hour_guarantee_gift_card_number).  Note: used
+   //! structure in case they want to add back in PIN.
+   required OneHourGuaranteeGiftCard gift_card = 5;
+};
+
+//! 1407 1HG Additions.
+message OneHourGuaranteeLookupRequest {
+
+   required string tc_number = 1;
+
+};
+
+//! 1407 1HG Additions.
+message OneHourGuaranteeLookupResponse {
+
+   optional OneHourGuaranteeLookup details_from_original_receipt = 1;
+
+};
+
+//! Image template
+message TemplateImage {
+
+    //! Id used to e.g. 11.png
+    required string template_id = 1;
+
+    //! Image data (PNG!)
+    required bytes png_image = 2;
+
+    //! Should this image be used instead of the Walmart/SamsClub logo
+    //! instead of simply being appended to the receipt?
+    optional bool replaces_top_logo = 3 [default = false];
+};
+
+//! Defaults templates images for the entire store
+message TemplatesConfigDefault {
+
+    //! The set of templates to choose from for each transaction for
+    //! the scenario that no customer identity was capture.
+    repeated string template_ids_for_no_customer_identity_provided = 1;
+
+    //! The set of templates to choose from for each transaction for
+    //! the scenario that whatever the customer identity entered
+    //! (phone, membership card) we weren't able to find a record of
+    //! that customer (not registered or lookup didn't return fast
+    //! enough).
+    repeated string template_ids_for_customer_identity_not_found = 2;
+
+    //! The customer is registered but they still want a paper
+    //! receipt.  We can put an image on there that reinforces
+    //! eReceipts or advertises a new feature of eReceipts (like
+    //! budgeting, Walmart Saver etc)
+    repeated string template_ids_for_customer_wants_paper_and_ereceipt = 3;
+};
+
+//! Overides to templates images per register
+message TemplatesConfigOverride {
+
+    //! The register id that the overide applies for (also called terminal number).
+    required string register_id = 4;
+
+    //! see TemplatesConfigDefault
+    repeated string template_ids_for_no_customer_identity_provided = 1;
+
+    //! see TemplatesConfigDefault
+    repeated string template_ids_for_customer_identity_not_found = 2;
+
+    //! see TemplatesConfigDefault
+    repeated string template_ids_for_customer_wants_paper_and_ereceipt = 3;
+};
+
+   //! Ask server for all the template information but don't send down
+   //! new images if we already have them.
+message SyncTemplatesRequest {
+
+   //! The template Ids for images that we already have.
+   repeated string existing_template_ids = 1;
+};
+
+//! The latest template image configuration
+message SyncTemplatesResponse {
+
+   //! Store wide defaults
+   required TemplatesConfigDefault templates_default = 1;
+
+   //! Any register overrides
+   repeated TemplatesConfigOverride templates_register_overrides = 2;
+
+   //! The set of image data that we don't already have (server should
+   //! not send us images that have ids in
+   //! SyncTemplatesRequest.existing_template_ids)
+   repeated TemplateImage new_templates = 3;
+
+   //! Only text & is_double_size is used from ReceiptLine
+   repeated ReceiptLine no_customer_identity_provided_alternate_text = 4;
+
+   //! Only text & is_double_size is used from ReceiptLine
+   repeated ReceiptLine customer_identity_not_found_alternate_text = 5;
+
+   //! Only text & is_double_size is used from ReceiptLine
+   repeated ReceiptLine customer_wants_paper_and_ereceipt_alternate_text = 6;
+
+   //! e.g. WALMART SAVER PRICE OVERRIDE (put after every item that had a price override)
+   optional string saver_return_slip_line_associate = 7;
+
+   //! WALMART SAVER PRICE OVERRIDE(S).  Added to receipts that had saver price override(s)
+   optional string saver_return_slip_line_customer = 8;
+};
+
+
+//! Attributes that reflect AB testable attributes of the card reader
+//! display.  e.g. The color of the call to action button.  or the info text to display.
+//! locale_id:1 key:ActionButtonVariant value:3
+message CardReaderAttribute {
+
+   //! The local's are defined in POS TSA.
+   required int32 locale_id = 1;
+
+   //! Attribute key.  e.g. "RegistrationQuestionText"
+   required string key = 2;
+
+   //! Attribute value.  e.g. "Have you registered for eReceipts?"
+   required string value = 3;
+};
+
+//! A profile for the card reader.  We can use profiles to mix up the value proposition and themes.
+message CardReaderProfile {
+
+   //! e.g. "SavePaperVariant2"
+   required string name = 1;
+
+   //! One profile is selected per transaction from a pool.  The
+   //! higher this number the more chance it has of beeing selected.
+   optional int32 frequency_bias = 2 [default = 1];
+
+   repeated CardReaderAttribute attributes = 3;
+};
+
+//! Ask server for the latest card reader profiles
+message RefreshCardReaderProfilesRequest {
+
+   // Nothing.
+};
+
+//! The latests profiles
+message RefreshCardReaderProfilesResponse {
+
+   repeated CardReaderProfile profiles = 1;
+};
+
+//! What is the state of a process (one of fep, uploader, dispatch).
+message ProcessStatus
+{
+    //! If we aren't "HEALTHY" we are in trouble
+    enum HealthStatus {
+
+       UNKNOWN = 1;
+
+       HEALTHY = 2;
+
+       DB_NOT_EXIST = 3;
+
+       FAILED_OPEN_DB = 4;
+
+       DISCONNECTED_DISPATCH = 5;
+
+       FAILED_CONNECT_DISPATCH = 6;
+
+       FAILED_SET_BUSY_TIMEOUT = 7;
+
+       NOT_RUNNING = 8;
+    };
+
+   required HealthStatus health_status = 1;
+
+   required int64 uptime_seconds = 2;
+
+   // VMS kb
+   required int32 mem_usage_kb = 3;
+
+   required int32 log_file_size_kb = 4;
+
+   //! How many errors have we encouted since the last time we've reported to the server?
+   optional int32 errors_since_last_heartbeat = 5;
+};
+
+//! We send up all the procss status and receive new configuration/actions
+message HeartbeatRequest {
+
+    required ProcessStatus fep_status = 1;
+
+    required ProcessStatus uploader_status = 2;
+
+    required ProcessStatus dispatch_status = 3;
+};
+
+//! Actions and configuration.
+message HeartbeatResponse {
+
+    //! Information about receipt throttling behavior
+    required CommsConfig comms_config = 1;
+
+    //! If this is true, the SMART box should purge it's receipt
+    //! queue. This should be set transiently (it shouldn't be true
+    //! twice in a row)
+    optional bool purge_queue_now = 2;
+
+    optional bool purge_logs_now = 3;
+
+    //! If true, the SMART server should restart the fep
+    optional bool force_restart_fep = 4;
+
+    //! If true, the SMART server should restart the uploader
+    optional bool force_restart_uploader = 5;
+
+    //! If true, the SMART server should restart the dispatch
+    optional bool force_restart_dispatch = 6;
+
+    optional bool upload_logs_now = 7;
+
+    //! if greater than 0 the SMART server should upload n number of test
+    //! receipts (used to test that batching, throttling etc is
+    //! working
+    optional int32 upload_test_receipts = 8;
+
+    optional int32 run_loop_sleep_microseconds = 9 [default = 1000];
+
+    optional int32 heartbeat_interval_modulo = 10  [default = 50];
+
+    optional int32 sync_templates_interval_modulo  = 11  [default = 1500];
+
+    //! debug, warning, trace, error = "dwte" or "dw"
+    //! warning, trace, error = "wte"
+    optional string logging_flags = 12 [default = "dwte"];
+
+    optional string url_domain = 13 [default = 'https://wlmt.co'];
+
+    //! Do a syncTemplates call immediately
+    optional bool sync_templates_now = 14;
+
+    //! Blow away the database and restart fep and uploader.  Fep will recreated DB.
+    //! Only used if we corrupt the DB somehow.
+    optional bool nuke_db_and_restart_fep_and_uploader = 15;
+
+    //! Nuke any log file that exceeds this size
+    optional int32 max_log_file_size_bytes = 16 [default = 5242880]; // 5MB.
+
+    optional int32 refresh_card_reader_profiles_interval_modulo  = 17  [default = 1500];
+
+    //! Do a refreshCardReaderProfiles call immediately
+    optional bool refresh_card_reader_profiles_now = 18;
+
+    //! Ask the controller for a set of static receipt images (header,
+    //! footer, survey)
+    optional bool refresh_static_images_now = 19;
+
+    optional int32 refresh_vudu_marketing_interval_modulo = 20 [default = 100000];
+
+    optional bool refersh_vudu_marketing_interval_now = 21;
+};
+
+//! The textural logs for all three processors on smart (Stored in
+//! /u/spool/02/eReceipts-fep.log, ... )
+message UploadLogsRequest {
+
+   required string fep_logs = 1;
+
+   required string uploader_logs = 2;
+
+   required string dispatch_logs = 3;
+};
+
+//! A flag to say whether we should delete our logs (the server has
+//! stored them safely).
+message UploadLogsResponse {
+
+   required bool purge_logs_now = 1;
+};
+
+//! We'v captured either the cusotmer's phone number or a membership
+//! card.  This message can be sent multiple times per transaction if
+//! the customer changes their mind.
+message LookupCustomerRequest {
+
+   //! Gathered from the CISAM database on the SMART server. Should
+   //! be either WMSC (Walmart Super Center) or SAMS (Sam's Club) or
+   //! WMGM (Walmart Greedy Manticore)
+   required string business_type = 1 ;
+
+   optional string phone_number = 2;
+
+   //! Sam's club membership number or any other Walmart subsidiary's
+   //! membership number
+   optional string membership_number = 3;
+};
+
+//! Did we find the customer?  How do they want their receipt.
+message LookupCustomerResponse {
+
+    enum ReceiptBehaviour {
+
+       CUSTOMER_IDENTITY_NOT_FOUND = 1;
+
+       CUSTOMER_WANTS_PAPER_AND_ERECEIPT = 2;
+
+       STUB_RECEIPT = 3;
+    };
+
+   required ReceiptBehaviour receipt_behaviour = 1;
+};
+
+//! Either tc_number or {register_id, register_transaction_number} provided.
+message TrxVoidedRequest {
+
+   //! Walmart's 20-25 digit TC Number.
+   optional string tc_number = 1;
+
+   //! terminal/reigster number. (TE#)
+   optional string register_id = 2;
+
+   //! The sequential per reigster transaction number (TR#)
+   optional string register_transaction_number = 3;
+};
+
+//! A response is implicit success.
+message TrxVoidedResponse {
+
+   // Nothing.
+};
+
+
+//! The controller has a set of images for headers, footers, surveys
+//! that get saved on receipt printers. We don't want to send the
+//! images up with the receipts because it is a waste of bandwidth.
+//! We just send the MD5 sums that should match one of these images.
+//! We periodically ask the controller for its set and give them to
+//! the server.
+message StaticImageDataRequest {
+
+   repeated bytes png_images = 1;
+};
+
+//! Implicit success.
+message StaticImageDataResponse {
+
+   // Nothing.
+};
+
+//! Vudu get to put have some marketing specific to the matched DVD
+//! upc for encouraging people to use digitial redemption.
+message VuduMarketingReceiptLine {
+
+   //! A line of text.  Server should make sure it will fit on the
+   //! receipt.  Especially important if this is double size font.
+   required string text = 1;
+
+   //! Do we use 2x font?
+   optional bool is_double_size = 2 [default = false];
+};
+
+//! A DVD product that is setup for digital redemption.  If a customer
+//! purchases a product that matches this then we print the vudu
+//! static image on the receipt and any per item text above and below
+//! that image.
+message VuduRedeemableProduct {
+
+   //! We don't want to be in the business of sanitising data.  Vudu
+   //! are responsible for UPC massage.
+   required string upc_as_on_receipt = 1;
+
+   //! Lines to print above the Vudu static advert image.
+   repeated VuduMarketingReceiptLine lines_above_image = 2;
+
+   //! Lines to print below the Vudu static advert image.
+   repeated VuduMarketingReceiptLine lines_below_image = 3;
+};
+
+//! Get a new data cut of Vudu stuff.
+message RefreshVuduMarketingRequest {
+
+   // Nothing.
+};
+
+//! We can have a pool of Vudu marketing images to pick from at the
+//! start of each transaction.  We save that image onto the receipt
+//! printer for fast printing.
+message MarketingImage {
+
+   required string name = 1;
+
+   required bytes png_image = 2;
+};
+
+//! The set of redeemable products as well as the set of marketing
+//! images to pick from at the start of the transaction.
+message RefreshVuduMarketingResponse
+{
+   repeated VuduRedeemableProduct products = 1;
+
+   // If more than one then image selected at random.
+   repeated MarketingImage png_marketing_images = 2;
+};
+
+message SiteToStoreCheckinRequest {
+
+   required string data_dump = 1;
+};
+
+message SiteToStoreCheckinResponse {
+
+};
+
+service ReceiptService {
+
+    rpc uploadReceipt ( UploadReceiptRequest ) returns ( UploadReceiptResponse );
+
+    rpc syncTemplates ( SyncTemplatesRequest ) returns ( SyncTemplatesResponse );
+
+    rpc refreshCardReaderProfiles ( RefreshCardReaderProfilesRequest ) returns ( RefreshCardReaderProfilesResponse );
+
+    rpc heartbeat ( HeartbeatRequest ) returns ( HeartbeatResponse );
+
+    rpc uploadLogs ( UploadLogsRequest ) returns ( UploadLogsResponse );
+
+    rpc lookupCustomer ( LookupCustomerRequest ) returns ( LookupCustomerResponse );
+
+    rpc receiptHistory ( ReceiptHistoryRequest ) returns ( ReceiptHistoryResponse );
+
+    rpc customerReceiptsLookup( CustomerReceiptsRequest ) returns ( CustomerReceiptsResponse );
+
+    rpc receiptForReturnLookup( ReceiptForReturnRequest ) returns ( ReceiptForReturnResponse );
+
+    rpc transactionVoided ( TrxVoidedRequest ) returns ( TrxVoidedResponse );
+
+    rpc staticImageData ( StaticImageDataRequest ) returns ( StaticImageDataResponse );
+
+    rpc refreshVuduMarketing ( RefreshVuduMarketingRequest ) returns ( RefreshVuduMarketingResponse );
+
+    rpc s2sCheckin( SiteToStoreCheckinRequest ) returns ( SiteToStoreCheckinResponse );
+
+    rpc oneHourGuaranteeLookup( OneHourGuaranteeLookupRequest ) returns ( OneHourGuaranteeLookupResponse );
+};
